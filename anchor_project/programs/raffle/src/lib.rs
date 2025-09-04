@@ -1,31 +1,34 @@
 #![allow(unexpected_cfgs)]
 use anchor_lang::prelude::*;
-mod state;
-mod errors;
-mod instructions;
-
-use instructions::{CreateRaffleContext, BuyTicketsContext, DrawWinnerContext, ClaimPrizeContext};
+pub use instructions::*;
+pub mod errors;
+pub mod instructions;
+pub mod state;
 
 declare_id!("ZjrgSoDagK6qA712jfrFuecHX2Zj8MXByns7FV2UMhs");
 
-#[allow(deprecated)] // see if this can be removed when upgrading Anchor libs
+#[program]
 pub mod raffle {
     use super::*;
 
-    pub fn create_raffle(ctx: Context<CreateRaffleContext>, ticket_price: u64, max_tickets: u32, end_time: u64) -> Result<()> {
-        instructions::create_raffle(ctx, ticket_price, max_tickets, end_time)
+    pub fn create_raffle(
+        ctx: Context<CreateRaffle>,
+        ticket_price: u64,
+        max_tickets: u32,
+        end_time: i64,
+    ) -> Result<()> {
+        create_raffle_impl(ctx, ticket_price, max_tickets, end_time)
     }
 
-    pub fn draw_winner(ctx: Context<DrawWinnerContext>) -> Result<()> {
-        instructions::draw_winner(ctx)
+    pub fn draw_winner(ctx: Context<DrawWinner>) -> Result<()> {
+        draw_winner_impl(ctx)
     }
 
-    pub fn buy_tickets(ctx: Context<BuyTicketsContext>, number_of_tickets: u32) -> Result<()> {
-        instructions::buy_tickets(ctx, number_of_tickets)
+    pub fn buy_tickets(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
+        buy_tickets_impl(ctx, number_of_tickets)
     }
 
-    pub fn claim_prize(ctx: Context<ClaimPrizeContext>) -> Result<()> {
-        instructions::claim_prize(ctx)
+    pub fn claim_prize(ctx: Context<ClaimPrize>) -> Result<()> {
+        claim_prize_impl(ctx)
     }
-
 }

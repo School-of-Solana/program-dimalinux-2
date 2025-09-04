@@ -1,70 +1,89 @@
-use crate::state::RaffleState;
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program::invoke;
-use anchor_lang::solana_program::system_instruction::create_account;
-use anchor_lang::system_program;
+use anchor_lang::{
+    prelude::*,
+    solana_program::clock::{Clock, UnixTimestamp},
+};
 
-pub fn create_raffle(ctx: Context<CreateRaffleContext>, ticket_price: u64, max_tickets: u32, end_time: u64) -> Result<()> {
-    let raffle_owner = &ctx.accounts.raffle_owner;
-    let raffle_stat_acct = &ctx.accounts.raffle_state;
+use crate::{
+    errors::RaffleError,
+    state::{RaffleState, RAFFLE_SEED},
+};
 
-    // Check that the account data length is zero (not initialized)
-    if raffle_stat_acct.data_len() != 0 {
-        return Err(ProgramError::AccountAlreadyInitialized.into());
-    }
-
-    // Check that the account owner is the system program ID. After we
-    // create the account, the owner will be our program ID.
-    if raffle_stat_acct.owner != &system_program::ID {
-        return Err(ProgramError::IncorrectProgramId.into());
-    }
-
-    // Create raffle state
-    let raffle_state = RaffleState {
-        authority: *raffle_owner.key,
-        ticket_price,
-        end_time,
-        winner: None,
+pub fn create_raffle_impl(
+    ctx: Context<CreateRaffle>,
+    ticket_price: u64,
+    max_tickets: u32,
+    end_time: UnixTimestamp,
+) -> Result<()> {
+    // Log the values of max_tickets and end_time
+    msg!(
+        "Creating raffle max_tickets: {}, end_time: {}",
         max_tickets,
-        claimed: false,
-        entrants: vec![],
-    };
+        UnixTimestamp::from(end_time)
+    );
 
-    let account_space = raffle_state.max_size_in_bytes();
-    let required_lamports = Rent::get()?.minimum_balance(account_space);
+    let raffle_owner = &ctx.accounts.raffle_owner;
+    let raffle_state = &mut ctx.accounts.raffle_state;
 
-    invoke(
-        &create_account(
-            raffle_owner.key,   // Account paying for the new account
-            raffle_stat_acct.key,   // Account to be created
-            required_lamports,    // Amount of lamports to transfer to the new account
-            account_space as u64, // Size in bytes to allocate for the data field
-            &crate::id(),           // Set program owner to our program
-        ),
-        &[
-            raffle_owner.to_account_info(),
-            raffle_stat_acct.to_account_info(),
-        ],
-    )?;
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now > raffle_state.end_time,
+        RaffleError::RaffleEndTimeInPast
+    );
 
-    // Somehow, the owner changes to the program ID during account creation,
-    // even though we didn't pass it to `invoke` as mutable.
-    if raffle_stat_acct.owner.ne(&crate::id()) {
-        return Err(ProgramError::IncorrectProgramId.into());
-    }
+    let _ = ticket_price
+        .checked_mul(max_tickets as u64)
+        .ok_or(RaffleError::RaffleTooLarge)?;
 
-    // Serialize and save the state
-    raffle_state.serialize_to_account(*raffle_stat_acct.try_borrow_mut_data()?)?;
+    raffle_state.owner = *raffle_owner.key;
+    raffle_state.ticket_price = ticket_price;
+    raffle_state.end_time = end_time;
+    raffle_state.winner = None;
+    raffle_state.max_tickets = max_tickets;
+    raffle_state.claimed = false;
+    raffle_state.entrants = vec![];
 
     Ok(())
 }
 
-
 #[derive(Accounts)]
-pub struct CreateRaffleContext<'info> {
+#[instruction(ticket_price: u64, max_tickets: u32, end_time: i64)]
+pub struct CreateRaffle<'info> {
     #[account(mut)]
     pub raffle_owner: Signer<'info>,
-    #[account(mut)]
-    pub raffle_state: UncheckedAccount<'info>,
+    #[account(
+        init,
+        payer = raffle_owner,
+        space = {8 + RaffleState::account_space(max_tickets)},
+        seeds = [
+            RAFFLE_SEED.as_bytes(),
+            raffle_owner.key().as_ref(),
+            end_time.to_le_bytes().as_ref(),
+        ],
+        bump
+    )]
+    pub raffle_state: Account<'info, RaffleState>,
     pub system_program: Program<'info, System>,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_raffle_seed() {
+        let program_id = crate::id();
+        let raffle_owner =
+            Pubkey::from_str("4SZPbRanvK5NeS5QdeemLCnfp5Zf42yQxM5TxxA5MbTR").unwrap();
+        let end_time: u64 = 1757544278_u64;
+        let expected_pda_addr = "2maAJzgpg4PeGUGDqwnbJru874fzPLDD9dCYei3caPFx";
+        let seeds = &[
+            RAFFLE_SEED.as_bytes(),
+            raffle_owner.as_ref(),
+            &end_time.to_le_bytes(),
+        ];
+        let pda_addr = Pubkey::find_program_address(seeds, &program_id);
+        assert_eq!(pda_addr.0.to_string(), expected_pda_addr.to_string());
+    }
 }

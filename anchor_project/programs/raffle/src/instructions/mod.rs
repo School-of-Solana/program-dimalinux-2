@@ -1,10 +1,11 @@
 pub mod buy_tickets;
-pub use buy_tickets::{buy_tickets, BuyTicketsContext};
+pub use buy_tickets::*;
+
 pub mod create_raffle;
-pub use create_raffle::{create_raffle, CreateRaffleContext};
+pub use create_raffle::*;
 
 pub mod draw_winner;
-pub use draw_winner::{draw_winner, DrawWinnerContext};
+pub use draw_winner::*;
 
 pub mod claim_prize;
-pub use claim_prize::{claim_prize, ClaimPrizeContext};
+pub use claim_prize::*;

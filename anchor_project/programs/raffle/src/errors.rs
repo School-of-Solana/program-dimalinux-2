@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum RaffleError {
-    #[msg("Too ew tickets to fulfill request")]
+    #[msg("Raffle end time must be in the future")]
+    RaffleEndTimeInPast,
+    #[msg("Too few tickets to fulfill request")]
     TooManyTickets,
     #[msg("Raffle is full")]
     RaffleFull,
@@ -16,10 +18,12 @@ pub enum RaffleError {
     WinnerAlreadyDrawn,
     #[msg("Prize already claimed")]
     PrizeAlreadyClaimed,
-    #[msg("Invalid prize amount")]
-    InvalidPrizeAmount,
+    #[msg("max_tickets * ticket_price exceeds u64")]
+    RaffleTooLarge,
     #[msg("Raffle state account is too small")]
     RaffleStateAccountTooSmall,
     #[msg("Raffle state data is invalid")]
     RaffleStateDataInvalid,
+    #[msg("Unauthorized")]
+    Unauthorized,
 }

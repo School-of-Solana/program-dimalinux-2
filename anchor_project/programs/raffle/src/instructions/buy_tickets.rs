@@ -1,32 +1,24 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program;
-use anchor_lang::solana_program::program::invoke;
-use anchor_lang::solana_program::system_instruction::transfer;
-use crate::errors::RaffleError;
-use crate::state::RaffleState;
+use core::iter;
 
-pub fn buy_tickets(ctx: Context<BuyTicketsContext>, number_of_tickets: u32) -> Result<()> {
-    let raffle_state_acct = &ctx.accounts.raffle_state;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{clock::Clock, program::invoke, system_instruction::transfer},
+};
+
+use crate::{
+    errors::RaffleError,
+    state::{RaffleState, RAFFLE_SEED},
+};
+
+pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
+    let raffle_state = &mut ctx.accounts.raffle_state;
     let buyer = &ctx.accounts.buyer;
 
-    // Verify that the unmanaged raffle state account is owned by our program
-    if raffle_state_acct.owner.ne(&crate::id()) {
-        return Err(ProgramError::IncorrectProgramId.into());
-    }
-
-    let mut raffle_state =
-        RaffleState::deserialize_from_account(&raffle_state_acct.try_borrow_data()?)?;
-
     // Check if the raffle has ended
-    let now: u64 = solana_program::clock::Clock::get()?
-        .unix_timestamp
-        .try_into()
-        .expect("Negative timestamp");
-    if now >= raffle_state.end_time {
-        return Err(RaffleError::RaffleEnded.into());
-    }
+    let now = Clock::get()?.unix_timestamp;
+    require!(now < raffle_state.end_time, RaffleError::RaffleEnded);
 
-    if !raffle_state.reserve_tickets(buyer.key, number_of_tickets) {
+    if !reserve_tickets(raffle_state, buyer.key(), number_of_tickets) {
         return Err(RaffleError::RaffleFull.into());
     }
 
@@ -39,27 +31,49 @@ pub fn buy_tickets(ctx: Context<BuyTicketsContext>, number_of_tickets: u32) -> R
     // Transfer ticket price from buyer to the raffle account
     invoke(
         &transfer(
-            &buyer.key(), // Source
-            &raffle_state_acct.key(), // Destination
-            total_price, // Amount in lamports
+            &buyer.key(),        // Source
+            &raffle_state.key(), // Destination
+            total_price,         // Amount in lamports
         ),
-        &[
-            buyer.to_account_info(),
-            raffle_state_acct.to_account_info(),
-        ],
+        &[buyer.to_account_info(), raffle_state.to_account_info()],
     )?;
-
-    // Save updated unmanaged raffle state back to the blockchain.
-    raffle_state.serialize_to_account(*raffle_state_acct.try_borrow_mut_data()?)?;
 
     Ok(())
 }
 
+pub fn reserve_tickets(
+    raffle_state: &mut Account<RaffleState>,
+    buyer: Pubkey,
+    num_tickets: u32,
+) -> bool {
+    if let Some(new_total) = raffle_state
+        .entrants
+        .len()
+        .checked_add(num_tickets as usize)
+    {
+        if new_total <= raffle_state.max_tickets as usize {
+            raffle_state
+                .entrants
+                .extend(iter::repeat(buyer).take(num_tickets as usize));
+            return true;
+        }
+    }
+    false
+}
+
 #[derive(Accounts)]
-pub struct BuyTicketsContext<'info> {
+pub struct BuyTickets<'info> {
     #[account(mut)]
     pub buyer: Signer<'info>,
-    #[account(mut)]
-    pub raffle_state: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [
+            RAFFLE_SEED.as_bytes(),
+            raffle_state.owner.key().as_ref(),
+            raffle_state.end_time.to_le_bytes().as_ref()
+        ],
+        bump
+    )]
+    pub raffle_state: Account<'info, RaffleState>,
     pub system_program: Program<'info, System>,
 }
