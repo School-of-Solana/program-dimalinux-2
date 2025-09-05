@@ -1,14 +1,32 @@
+import * as chai from "chai";
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import { Program, BN } from "@coral-xyz/anchor";
+import {
+  Keypair,
+  Connection,
+  PublicKey,
+  SystemProgram,
+  TransactionSignature,
+} from "@solana/web3.js";
 import { Raffle } from "../target/types/raffle";
 
 interface RaffleConf {
-  owner: anchor.web3.Keypair;
+  owner: Keypair;
   ticketPrice: anchor.BN;
   maxTickets: number;
   endTime: anchor.BN;
-  pda: anchor.web3.PublicKey;
+  pda: PublicKey;
   bump: number;
+}
+
+interface RaffleState {
+  owner: PublicKey;
+  ticketPrice: BN;
+  endTime: BN;
+  winner: PublicKey | null;
+  maxTickets: number;
+  claimed: boolean;
+  entrants: PublicKey[];
 }
 
 describe("raffle", () => {
@@ -23,15 +41,58 @@ describe("raffle", () => {
     const endDelta = 7 * 24 * 60 * 60; // 7 days
 
     const config = await createRaffle(ticketPrice, maxTickets, endDelta);
+    let state = await raffleState(config.pda);
 
-    console.log("raffle", config);
+    chai.assert(state.owner.equals(config.owner.publicKey));
+    chai.assert(state.ticketPrice.eq(ticketPrice));
+    chai.assert(state.endTime.eq(config.endTime));
+    chai.assert(state.maxTickets === maxTickets);
+    chai.assert(state.winner === null);
+    chai.assert(state.claimed === false);
+    chai.assert(state.entrants.length === 0);
   });
 
-  async function airdrop(connection: any, address: any, amount = 1000000000) {
+  it("Buy tickets", async () => {
+    const ticketPrice = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
+    const maxTickets = 10;
+    const endDelta = 24 * 60 * 60; // 1 days
+
+    const config = await createRaffle(ticketPrice, maxTickets, endDelta);
+    let buyer1 = await createFundedWallet();
+    let buyer2 = await createFundedWallet();
+
+    await buyTickets(config.pda, buyer1, 2);
+    await buyTickets(config.pda, buyer2, 1);
+
+    let state = await raffleState(config.pda);
+    chai.assert(state.entrants.length === 3);
+    chai.assert(state.entrants[0].equals(buyer1.publicKey));
+    chai.assert(state.entrants[1].equals(buyer1.publicKey));
+    chai.assert(state.entrants[2].equals(buyer2.publicKey));
+  });
+
+  async function createFundedWallet(
+    amountInSOL: number = 0.1
+  ): Promise<Keypair> {
+    const wallet: Keypair = anchor.web3.Keypair.generate();
+    const lamports: number = amountInSOL * anchor.web3.LAMPORTS_PER_SOL;
+    let connection: Connection = provider.connection;
+    const signature: TransactionSignature = await connection.requestAirdrop(
+      wallet.publicKey,
+      lamports
+    );
+    const latestBlockhash = await connection.getLatestBlockhash();
+
     await connection.confirmTransaction(
-      await connection.requestAirdrop(address, amount),
+      {
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      },
       "confirmed"
     );
+
+    return wallet;
   }
 
   function getRaffleStateAddress(
@@ -50,6 +111,10 @@ describe("raffle", () => {
     );
   }
 
+  async function raffleState(pda: PublicKey): Promise<RaffleState> {
+    return (await program.account.raffleState.fetch(pda)) as RaffleState;
+  }
+
   /**
    * Creates a raffle and returns the funded raffle owner.
    * @param ticketPrice BN
@@ -64,8 +129,7 @@ describe("raffle", () => {
     const now = Math.floor(Date.now() / 1000);
     const endTime = new anchor.BN(now + endDelta);
 
-    const raffleOwner = anchor.web3.Keypair.generate();
-    await airdrop(provider.connection, raffleOwner.publicKey);
+    const raffleOwner: Keypair = await createFundedWallet();
 
     const [raffleStatePda, bump] = getRaffleStateAddress(
       raffleOwner.publicKey,
@@ -78,7 +142,7 @@ describe("raffle", () => {
       .accounts({
         raffleOwner: raffleOwner.publicKey,
         raffleState: raffleStatePda,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        systemProgram: SystemProgram.programId,
       })
       .signers([raffleOwner])
       .rpc({ commitment: "confirmed" });
@@ -91,5 +155,36 @@ describe("raffle", () => {
       pda: raffleStatePda,
       bump,
     };
+  }
+
+  async function buyTickets(
+    raffleState: PublicKey,
+    buyer: Keypair,
+    numTickets: number = 1
+  ): Promise<TransactionSignature> {
+    return await program.methods
+      .buyTickets(numTickets)
+      .accounts({
+        buyer: buyer.publicKey,
+        raffleState: raffleState,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([buyer])
+      .rpc({ commitment: "confirmed" });
+  }
+
+  async function drawWinner(
+    raffle: RaffleConf,
+    owner: Keypair
+  ): Promise<TransactionSignature> {
+    return await program.methods
+      .drawWinner()
+      .accounts({
+        raffleOwner: owner.publicKey,
+        raffleState: raffle.pda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([owner])
+      .rpc({ commitment: "confirmed" });
   }
 });
