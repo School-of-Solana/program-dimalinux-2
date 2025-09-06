@@ -71,6 +71,34 @@ describe("raffle", () => {
     chai.assert(state.entrants[2].equals(buyer2.publicKey));
   });
 
+  it("Draw winner", async () => {
+    const ticketPrice = new anchor.BN(0.00001 * anchor.web3.LAMPORTS_PER_SOL);
+    const maxTickets = 2;
+    const endDelta = 10; // 10 seconds from now
+
+    const config = await createRaffle(ticketPrice, maxTickets, endDelta);
+    let buyer1 = await createFundedWallet();
+    let buyer2 = await createFundedWallet();
+
+    await buyTickets(config.pda, buyer1, 1);
+    await buyTickets(config.pda, buyer2, 1);
+
+    const stateBefore: RaffleState = await raffleState(config.pda);
+    await drawWinner(config.pda, config.owner);
+    const stateAfter: RaffleState = await raffleState(config.pda);
+
+    chai.assert(stateBefore.winner === null);
+    chai.assert(stateAfter.winner !== null);
+
+    if (stateAfter.winner.equals(buyer1.publicKey)) {
+      console.log("Buyer 1 is the winner!");
+    } else if (stateAfter.winner.equals(buyer2.publicKey)) {
+      console.log("Buyer 2 is the winner!");
+    } else {
+      throw new Error("Winner is neither buyer 1 nor buyer 2!");
+    }
+  });
+
   async function createFundedWallet(
     amountInSOL: number = 0.1
   ): Promise<Keypair> {
@@ -174,14 +202,14 @@ describe("raffle", () => {
   }
 
   async function drawWinner(
-    raffle: RaffleConf,
+    raffleState: PublicKey,
     owner: Keypair
   ): Promise<TransactionSignature> {
     return await program.methods
       .drawWinner()
       .accounts({
         raffleOwner: owner.publicKey,
-        raffleState: raffle.pda,
+        raffleState: raffleState,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([owner])
