@@ -31,9 +31,9 @@ interface RaffleState {
 
 describe("raffle", () => {
   const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
+  const connection = provider.connection;
   const program = anchor.workspace.raffle as Program<Raffle>;
+  anchor.setProvider(provider);
 
   it("Create Raffle", async () => {
     const ticketPrice = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
@@ -99,12 +99,44 @@ describe("raffle", () => {
     }
   });
 
+  it("Claim prize", async () => {
+    const ticketPrice = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
+    const maxTickets = 2;
+    const endDelta = 10; // 10 seconds
+
+    const config: RaffleConf = await createRaffle(
+      ticketPrice,
+      maxTickets,
+      endDelta
+    );
+    const buyer: Keypair = await createFundedWallet();
+
+    await buyTickets(config.pda, buyer, 2);
+    await drawWinner(config.pda, config.owner);
+    const stateAfterDraw: RaffleState = await raffleState(config.pda);
+    chai.assert(buyer.publicKey.equals(stateAfterDraw.winner)); // 1 buyer bought all tickets
+    chai.assert(!stateAfterDraw.claimed);
+
+    const balanceBefore = await connection.getBalance(buyer.publicKey);
+
+    const tx = await claimPrize(config.pda, buyer);
+    const stateAfterClaim: RaffleState = await raffleState(config.pda);
+    chai.assert(stateAfterClaim.claimed === true);
+
+    // Note: Anchor is using the default wallet as fee payer, so we don't need to
+    // account for transaction fees here.
+    const balanceAfter = await connection.getBalance(buyer.publicKey);
+    chai.assert(
+      balanceAfter === balanceBefore + ticketPrice.toNumber() * maxTickets
+    );
+  });
+
   async function createFundedWallet(
     amountInSOL: number = 0.1
   ): Promise<Keypair> {
     const wallet: Keypair = anchor.web3.Keypair.generate();
     const lamports: number = amountInSOL * anchor.web3.LAMPORTS_PER_SOL;
-    let connection: Connection = provider.connection;
+
     const signature: TransactionSignature = await connection.requestAirdrop(
       wallet.publicKey,
       lamports
@@ -213,6 +245,21 @@ describe("raffle", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([owner])
+      .rpc({ commitment: "confirmed" });
+  }
+
+  async function claimPrize(
+    raffleState: PublicKey,
+    winner: Keypair
+  ): Promise<TransactionSignature> {
+    return await program.methods
+      .claimPrize()
+      .accounts({
+        winner: winner.publicKey,
+        raffleState: raffleState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([winner])
       .rpc({ commitment: "confirmed" });
   }
 });
