@@ -1,0 +1,26 @@
+{
+  "name": "raffle",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json"
+  },
+  "devDependencies": {
+    "@solana/wallet-adapter-base": "^0.9.23",
+    "@solana/wallet-adapter-phantom": "^0.9.24",
+    "@solana/wallet-adapter-solflare": "^0.6.28",
+    "@solana/web3.js": "^1.95.3",
+    "@sveltejs/vite-plugin-svelte": "^6.1.4",
+    "@tsconfig/svelte": "^5.0.4",
+    "svelte": "^5.0.0-next.245",
+    "svelte-check": "^4.3.1",
+    "tslib": "^2.7.0",
+    "typescript": "^5.6.2",
+    "vite": "^7.1.4",
+    "vite-plugin-node-polyfills": "^0.24.0"
+  }
+}
