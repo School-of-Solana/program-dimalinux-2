@@ -1,0 +1,25 @@
+# Ignore dependencies
+node_modules
+
+# Build outputs
+build
+dist
+public/build
+.vite
+.svelte-kit
+
+# Lockfiles and generated files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Coverage, editor files, OS files
+coverage
+.DS_Store
+.vscode
+.idea
+
+# Misc
+.env
+.env.*
+

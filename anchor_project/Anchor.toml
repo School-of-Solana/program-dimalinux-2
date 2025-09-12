@@ -1,14 +1,14 @@
 [toolchain]
-package_manager = "yarn"
 anchor_version = "0.31.1"
 solana_version = "2.2.12"
+package_manager = "yarn"
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
-raffle = "ZjrgSoDagK6qA712jfrFuecHX2Zj8MXByns7FV2UMhs"
+raffle = "H3yT9Lb96D6JsbSWQeUdMZHj6avCEnU8vJAdEot4AkWw"
 
 [registry]
 url = "https://api.apr.dev"
