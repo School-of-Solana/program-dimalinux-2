@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { web3, BN } from "@coral-xyz/anchor";
   import type { TransactionSignature, PublicKey } from "@solana/web3.js";
+  import { navigate } from "../router";
 
   const { LAMPORTS_PER_SOL } = web3;
 
@@ -97,6 +98,8 @@
       raffleTxSig = signature;
       createdRafflePda = rafflePda.toBase58();
       raffleExplorerUrl = `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+      // Automatically navigate to the new raffle overview page
+      navigate(`/raffle/${encodeURIComponent(createdRafflePda)}`);
     } catch (err) {
       raffleError = err instanceof Error ? err.message : String(err);
       console.log("Error creating raffle:", err);
@@ -200,9 +203,10 @@
           </div>
           {#if createdRafflePda}
             <div class="pda-link">
-              View raffle: <a href={`#/view/${createdRafflePda}`}
-                >{createdRafflePda}</a
-              >
+              Open raffle: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}`}>{createdRafflePda}</a>
+            </div>
+            <div class="pda-link">
+              Owner tools: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}?tab=owner`}>manage</a>
             </div>
           {/if}
         </div>

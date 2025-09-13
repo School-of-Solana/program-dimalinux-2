@@ -7,9 +7,7 @@
   import { currentRoute, initRouter } from "./lib/router";
   import Home from "./lib/pages/Home.svelte";
   import CreateRaffle from "./lib/pages/CreateRaffle.svelte";
-  import ViewRaffle from "./lib/pages/ViewRaffle.svelte";
   import ManageRaffle from "./lib/pages/ManageRaffle.svelte";
-  import BuyTickets from "./lib/pages/BuyTickets.svelte";
 
   const localStorageKey = "walletAdapter";
   const walletAdapters = [
@@ -36,12 +34,8 @@
       <Home />
     {:else if $currentRoute.segments[0] === "create"}
       <CreateRaffle />
-    {:else if $currentRoute.segments[0] === "view" && $currentRoute.params.pda}
-      <ViewRaffle pda={$currentRoute.params.pda} />
-    {:else if $currentRoute.segments[0] === "manage" && $currentRoute.params.pda}
+    {:else if $currentRoute.segments[0] === "raffle" && $currentRoute.params.pda}
       <ManageRaffle pda={$currentRoute.params.pda} />
-    {:else if $currentRoute.segments[0] === "buy" && $currentRoute.params.pda}
-      <BuyTickets pda={$currentRoute.params.pda} />
     {:else}
       <p>Page not found.</p>
     {/if}
