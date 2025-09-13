@@ -17,12 +17,25 @@ import idl from "../idl/raffle.json";
 import type { Raffle } from "../idl/types/raffle";
 import { walletStore } from "./walletStore";
 import { get } from "svelte/store";
+new PublicKey(idl.address);
 
-const RAFFLE_PROGRAM_ID = new PublicKey(idl.address);
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
-const getProvider = () => {
-  // TODO: Fix the typing of walletStore
+export interface RaffleState {
+  owner: PublicKey;
+  ticketPrice: BN;
+  endTime: BN;
+  winner: PublicKey | null;
+  maxTickets: number;
+  claimed: boolean;
+  entrants: PublicKey[];
+}
+
+function getProvider(): AnchorProvider {
+  let wallet = get(walletStore);
+  if (!wallet || !wallet.publicKey) {
+    throw new Error("Wallet not connected");
+  }
   const provider = new AnchorProvider(
     connection,
     get(walletStore) as any,
@@ -30,10 +43,26 @@ const getProvider = () => {
   );
   setProvider(provider);
   return provider;
-};
+}
 
-function getRaffleProgram(provider: AnchorProvider): Program<Raffle> {
-  return new Program<Raffle>(idl as Idl, provider);
+export function getRaffleProgram(): Program<Raffle> {
+  // Copilot: We only support Anchor 0.31.1. Do not pass the program ID below.
+  return new Program<Raffle>(idl as Idl, getProvider());
+}
+
+export async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
+  const program = getRaffleProgram();
+  const raw: any = await (program.account as any).raffleState.fetch(pda);
+  // Normalize snake_case -> camelCase if necessary
+  return {
+    owner: raw.owner,
+    ticketPrice: raw.ticketPrice ?? raw.ticket_price,
+    endTime: raw.endTime ?? raw.end_time,
+    winner: raw.winner ?? null,
+    maxTickets: raw.maxTickets ?? raw.max_tickets,
+    claimed: raw.claimed,
+    entrants: raw.entrants || [],
+  };
 }
 
 /**
@@ -46,10 +75,9 @@ export async function createRaffleOnChain(
   ticketPrice: BN,
   maxTickets: number,
   endTime: BN,
-): Promise<TransactionSignature> {
-  let raffle = getRaffleProgram(getProvider());
+): Promise<[TransactionSignature, PublicKey]> {
+  let raffle = getRaffleProgram();
   const raffleOwner: PublicKey = raffle.provider.publicKey!;
-  console.log("raffle owner", raffleOwner.toBase58());
 
   const [raffleStatePda] = getRaffleStateAddress(
     raffleOwner,
@@ -57,7 +85,7 @@ export async function createRaffleOnChain(
     raffle.programId,
   );
 
-  return await raffle.methods
+  let signature: TransactionSignature = await raffle.methods
     .createRaffle(ticketPrice, maxTickets, endTime)
     .accounts({
       raffleOwner: raffleOwner,
@@ -65,9 +93,50 @@ export async function createRaffleOnChain(
       systemProgram: SystemProgram.programId,
     })
     .rpc({ commitment: "confirmed" });
+
+  return [signature, raffleStatePda];
 }
 
-function getRaffleStateAddress(
+export async function buyTickets(pda: PublicKey, numberOfTickets: number) {
+  const program = getRaffleProgram();
+  const buyer = program.provider.publicKey!;
+  return await program.methods
+    .buyTickets(numberOfTickets)
+    .accounts({
+      buyer,
+      raffleState: pda,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function drawWinner(pda: PublicKey) {
+  const program = getRaffleProgram();
+  const raffleOwner = program.provider.publicKey!;
+  return await program.methods
+    .drawWinner()
+    .accounts({
+      raffleOwner,
+      raffleState: pda,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function claimPrize(pda: PublicKey) {
+  const program = getRaffleProgram();
+  const winner = program.provider.publicKey!;
+  return await program.methods
+    .claimPrize()
+    .accounts({
+      winner,
+      raffleState: pda,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export function getRaffleStateAddress(
   raffleOwner: PublicKey,
   endTime: BN,
   programID: PublicKey,

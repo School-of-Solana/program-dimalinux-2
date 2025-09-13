@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { walletStore } from "./walletStore";
-  import { createRaffleOnChain } from "./Raffle";
+  import { walletStore } from "../walletStore";
+  import { createRaffleOnChain } from "../Raffle";
   import { onMount } from "svelte";
-  import { web3 } from "@coral-xyz/anchor";
-  import { BN } from "@coral-xyz/anchor";
+  import { web3, BN } from "@coral-xyz/anchor";
+  import type { TransactionSignature, PublicKey } from "@solana/web3.js";
 
   const { LAMPORTS_PER_SOL } = web3;
 
@@ -16,7 +16,6 @@
 
   let ticketPriceLamports: number = Math.round(ticketPrice * LAMPORTS_PER_SOL);
 
-  // default expiration to one week from now (local time)
   function pad(n: number) {
     return n.toString().padStart(2, "0");
   }
@@ -34,7 +33,6 @@
     if (!expirationTime) expirationTime = formatTimeLocal(oneWeek);
   });
 
-  // helper: parse explicitly rather than relying on Date parsing
   function parseDateTimeToEpoch(
     dateStr: string,
     timeStr: string,
@@ -56,11 +54,9 @@
     }
   }
 
-  // default time to start of day when user picks a date and no time chosen
   $: if (expirationDate && !expirationTime) {
     expirationTime = "00:00";
   }
-
   $: expirationEpoch = parseDateTimeToEpoch(
     expirationDate,
     expirationTime,
@@ -72,13 +68,11 @@
     const v = parseInt(target.value || "", 10);
     maxTickets = Number.isNaN(v) ? 0 : Math.max(1, v);
   }
-
   function handleTicketPriceInput(e: Event) {
     const target = e.target as HTMLInputElement;
     const v = parseFloat(target.value || "");
     ticketPrice = Number.isNaN(v) ? 0 : v;
   }
-
   $: ticketPriceLamports = Math.round(
     (Number.isFinite(ticketPrice) ? ticketPrice : 0) * LAMPORTS_PER_SOL,
   );
@@ -86,21 +80,26 @@
   let raffleTxSig: string | null = null;
   let raffleExplorerUrl: string | null = null;
   let raffleError: string | null = null;
+  let createdRafflePda: string | null = null;
 
   async function createRaffleClicked() {
     raffleTxSig = null;
     raffleExplorerUrl = null;
     raffleError = null;
+    createdRafflePda = null;
     try {
-      const tsSig = await createRaffleOnChain(
-        new BN(ticketPriceLamports),
-        maxTickets,
-        new BN(expirationEpoch!),
-      );
-      raffleTxSig = tsSig;
-      raffleExplorerUrl = `https://explorer.solana.com/tx/${tsSig}?cluster=devnet`;
+      const [signature, rafflePda]: [TransactionSignature, PublicKey] =
+        await createRaffleOnChain(
+          new BN(ticketPriceLamports),
+          maxTickets,
+          new BN(expirationEpoch!),
+        );
+      raffleTxSig = signature;
+      createdRafflePda = rafflePda.toBase58();
+      raffleExplorerUrl = `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
     } catch (err) {
       raffleError = err instanceof Error ? err.message : String(err);
+      console.log("Error creating raffle:", err);
     }
   }
 </script>
@@ -120,7 +119,6 @@
       placeholder="Enter max tickets"
     />
   </div>
-
   <div class="field-row">
     <label for="ticketPrice">Ticket Price (SOL):</label>
     <input
@@ -133,9 +131,7 @@
       placeholder="Enter price in SOL"
     />
   </div>
-
   <div class="price-preview preview">Lamports: {ticketPriceLamports}</div>
-
   <fieldset class="expiration-row">
     <legend>Raffle End:</legend>
     <div
@@ -155,7 +151,6 @@
           <option value="utc">UTC</option>
         </select>
       </div>
-
       <div class="control date-control">
         <label for="expirationDate" class="small-label">Date</label>
         <input
@@ -165,7 +160,6 @@
           aria-label="Expiration date"
         />
       </div>
-
       <div class="control time-control">
         <label for="expirationTime" class="small-label">Time</label>
         <input
@@ -176,7 +170,6 @@
         />
       </div>
     </div>
-
     {#if expirationEpoch}
       <div class="expiration-preview preview">
         <span class="epoch-line"
@@ -187,7 +180,6 @@
       </div>
     {/if}
   </fieldset>
-
   <div>
     {#if $walletStore.connected}
       <button
@@ -195,16 +187,24 @@
         disabled={!(maxTickets > 0) ||
           !(ticketPrice > 0) ||
           !expirationDate ||
-          !expirationTime}
+          !expirationTime}>Create Raffle</button
       >
-        Create Raffle
-      </button>
       {#if raffleTxSig && raffleExplorerUrl}
         <div class="tx-result">
-          <span>New raffle created: </span>
-          <a href={raffleExplorerUrl} target="_blank" rel="noopener noreferrer"
-            >{raffleTxSig}</a
-          >
+          <div>
+            <span>New raffle created: </span><a
+              href={raffleExplorerUrl}
+              target="_blank"
+              rel="noopener noreferrer">{raffleTxSig}</a
+            >
+          </div>
+          {#if createdRafflePda}
+            <div class="pda-link">
+              View raffle: <a href={`#/view/${createdRafflePda}`}
+                >{createdRafflePda}</a
+              >
+            </div>
+          {/if}
         </div>
       {/if}
       {#if raffleError}
@@ -219,7 +219,6 @@
 </div>
 
 <style>
-  /* Container */
   .create-raffle-form {
     max-width: 400px;
     margin: 2rem auto;
@@ -228,50 +227,39 @@
     border-radius: 8px;
     font-family: inherit;
   }
-
   .create-raffle-form h2 {
     margin: 0 0 1rem 0;
     font-size: 1.25rem;
   }
-
-  /* Inline label + input rows */
   .field-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
-
   .field-row label {
-    width: 140px; /* aligns labels */
+    width: 140px;
     margin: 0;
     white-space: nowrap;
     font-weight: normal;
     font-size: 1rem;
   }
-
-  /* Compact numeric inputs in inline rows */
   .create-raffle-form .field-row input {
     width: 8rem;
     max-width: 10rem;
     padding: 0.35rem 0.4rem;
     box-sizing: border-box;
   }
-
-  /* Expiration group */
   .expiration-row {
     margin-bottom: 1rem;
     text-align: center;
   }
-
   .expiration-row legend {
     display: block;
     margin-bottom: 0.25rem;
     font-weight: normal;
     font-size: 1rem;
   }
-
-  /* Zone / Date / Time controls in a single centered row */
   .expiration-controls {
     display: flex;
     justify-content: center;
@@ -279,63 +267,60 @@
     gap: 0.75rem;
     margin-top: 0.25rem;
   }
-
   .expiration-controls .control {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-width: 4.5rem;
   }
-
   .expiration-controls .control input,
   .expiration-controls .control select {
     padding: 0.35rem 0.4rem;
     box-sizing: border-box;
   }
-
   .small-label {
     font-size: 0.9rem;
     margin-bottom: 0.2rem;
     font-weight: normal;
   }
-
-  /* Previews (price and epoch) - unified styling for readability */
   .preview {
     display: inline-block;
     margin-top: 0.4rem;
-    padding: 0.22rem 0.35rem; /* smaller padding to make it less prominent */
-    background: rgba(15, 23, 42, 0.02); /* very faint background */
-    color: #35fff2ff; /* muted blue-gray text */
+    padding: 0.22rem 0.35rem;
+    background: rgba(15, 23, 42, 0.02);
+    color: #35fff2ff;
     border-radius: 4px;
-    border: 1px solid rgba(15, 23, 42, 0.04); /* extremely subtle border */
+    border: 1px solid rgba(15, 23, 42, 0.04);
     font-size: 0.92rem;
     line-height: 1;
   }
-
   .epoch-line {
     display: inline-flex;
     gap: 0.4rem;
     align-items: center;
   }
-  .epoch-label,
-  .epoch-value {
-    white-space: nowrap;
-    color: inherit;
-  }
-
-  /* Generic inputs (date/time and others) use full width by default; overridden by more specific rules above */
   .create-raffle-form input {
     width: 100%;
     padding: 0.5rem;
     box-sizing: border-box;
   }
-
   .create-raffle-form button {
     padding: 0.7rem 1.25rem;
     font-size: 1rem;
   }
-
-  /* Small screens: allow controls to wrap */
+  .tx-result {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .tx-result a {
+    word-break: break-all;
+  }
+  .pda-link a {
+    font-weight: 600;
+  }
   @media (max-width: 480px) {
     .field-row {
       flex-direction: column;
