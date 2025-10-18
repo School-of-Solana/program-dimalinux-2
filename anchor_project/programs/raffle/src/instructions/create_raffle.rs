@@ -20,6 +20,7 @@ pub fn create_raffle_impl(
         max_tickets,
         UnixTimestamp::from(end_time)
     );
+    msg!("Raffle state account: {}", ctx.accounts.raffle_state.key());
 
     let raffle_owner = &ctx.accounts.raffle_owner;
     let raffle_state = &mut ctx.accounts.raffle_state;
@@ -37,7 +38,7 @@ pub fn create_raffle_impl(
     raffle_state.owner = *raffle_owner.key;
     raffle_state.ticket_price = ticket_price;
     raffle_state.end_time = end_time;
-    raffle_state.winner = None;
+    raffle_state.winner_index = None;
     raffle_state.max_tickets = max_tickets;
     raffle_state.claimed = false;
     raffle_state.entrants = vec![];

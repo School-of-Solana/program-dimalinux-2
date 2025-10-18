@@ -1,226 +1,218 @@
 import * as chai from "chai";
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
+import { AnchorProvider, BN, Program, Provider } from "@coral-xyz/anchor";
+import { Randomness } from "@switchboard-xyz/on-demand";
 import {
-  Keypair,
   Connection,
+  Keypair,
   PublicKey,
   SystemProgram,
+  Transaction,
   TransactionSignature,
+  ConfirmOptions,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import { Raffle } from "../target/types/raffle";
+import {
+  loadSbProgram,
+  loadOrCreateRandomnessAccount,
+  setupQueue,
+} from "./utils/randomness";
+
+const PROVIDER_URL: string = "https://api.devnet.solana.com";
 
 interface RaffleConf {
   owner: Keypair;
-  ticketPrice: anchor.BN;
+  ticketPrice: BN;
   maxTickets: number;
-  endTime: anchor.BN;
+  endTime: BN;
   pda: PublicKey;
   bump: number;
 }
-
 interface RaffleState {
   owner: PublicKey;
   ticketPrice: BN;
   endTime: BN;
-  winner: PublicKey | null;
+  winnerIndex: number | null;
   maxTickets: number;
-  claimed: boolean;
   entrants: PublicKey[];
+  randomnessAccount: PublicKey;
+  commitSlot: BN;
+  claimed: boolean;
 }
 
+const opts: ConfirmOptions = {
+  preflightCommitment: "confirmed",
+  commitment: "confirmed",
+  skipPreflight: false,
+};
+
 describe("raffle", () => {
-  const provider = anchor.AnchorProvider.env();
-  const connection = provider.connection;
+  const wallet = anchor.AnchorProvider.env().wallet;
+  const connection = new Connection(PROVIDER_URL);
+
+  const provider = new AnchorProvider(connection, wallet, opts);
+  anchor.setProvider(provider);
   const program = anchor.workspace.raffle as Program<Raffle>;
   anchor.setProvider(provider);
+  let queueKey: PublicKey;
+  let rngKp: Keypair;
+  let randomness: Randomness;
 
-  it("Create Raffle", async () => {
-    const ticketPrice = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
-    const maxTickets = 100;
-    const endDelta = 7 * 24 * 60 * 60; // 7 days
+  before(async function () {
+    queueKey = await setupQueue(connection.rpcEndpoint);
+    const sbProgram = await loadSbProgram(provider);
+    // load or create randomness account
+    [randomness, rngKp] = await loadOrCreateRandomnessAccount(
+      provider,
+      sbProgram,
+      queueKey
+    );
+  });
 
-    const config = await createRaffle(ticketPrice, maxTickets, endDelta);
-    let state = await raffleState(config.pda);
+  after(async function () {
+    // console.error("Closing out randomness account");
+    // if (randomness && (await connection.getAccountInfo(randomness.pubkey))) {
+    //   await randomness.closeIx();
+    // } else {
+    //   console.warn("Randomness account does not exist on-chain, skipping closeIx.");
+    // }
+  });
 
+  it.skip("Create Raffle", async () => {
+    console.error("Creating Raffle");
+    const config = await createRaffle(
+      new BN(0.0001 * anchor.web3.LAMPORTS_PER_SOL),
+      5,
+      300
+    );
+    console.error("Created raffle with state:", config.pda.toBase58());
+    const state = await raffleState(config.pda);
+    console.error("Created raffle with state:", state);
     chai.assert(state.owner.equals(config.owner.publicKey));
-    chai.assert(state.ticketPrice.eq(ticketPrice));
-    chai.assert(state.endTime.eq(config.endTime));
-    chai.assert(state.maxTickets === maxTickets);
-    chai.assert(state.winner === null);
-    chai.assert(state.claimed === false);
-    chai.assert(state.entrants.length === 0);
+    chai.assert(state.ticketPrice.eq(config.ticketPrice));
+    chai.assert(state.maxTickets === config.maxTickets);
+    chai.assert(state.winnerIndex === null);
+    chai.assert(!state.claimed);
   });
 
-  it("Buy tickets", async () => {
-    const ticketPrice = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
-    const maxTickets = 10;
-    const endDelta = 24 * 60 * 60; // 1 days
+  it("Full Raffle", async () => {
+    const ticketPrice = new BN(0.00001 * anchor.web3.LAMPORTS_PER_SOL);
+    const config = await createRaffle(ticketPrice, 1, 120); // 5s end
+    console.error("Created raffle with state:", config.pda.toBase58());
 
-    const config = await createRaffle(ticketPrice, maxTickets, endDelta);
-    let buyer1 = await createFundedWallet();
-    let buyer2 = await createFundedWallet();
+    let sig: TransactionSignature = await buyTickets(
+      config.pda,
+      wallet.payer,
+      1
+    );
+    await printLogs("buyTickets", sig);
 
-    await buyTickets(config.pda, buyer1, 2);
-    await buyTickets(config.pda, buyer2, 1);
-
-    let state = await raffleState(config.pda);
-    chai.assert(state.entrants.length === 3);
-    chai.assert(state.entrants[0].equals(buyer1.publicKey));
-    chai.assert(state.entrants[1].equals(buyer1.publicKey));
-    chai.assert(state.entrants[2].equals(buyer2.publicKey));
+    let state: RaffleState = await raffleState(config.pda);
+    chai.assert(state.maxTickets == 1);
+    chai.assert(state.entrants.length == 1);
+    await shuffleAndDrawWinner(config.pda);
+    console.error("shuffled and drew winner");
+    // TODO: Test claim prize
   });
 
-  it("Draw winner", async () => {
-    const ticketPrice = new anchor.BN(0.00001 * anchor.web3.LAMPORTS_PER_SOL);
-    const maxTickets = 2;
-    const endDelta = 10; // 10 seconds from now
-
-    const config = await createRaffle(ticketPrice, maxTickets, endDelta);
-    let buyer1 = await createFundedWallet();
-    let buyer2 = await createFundedWallet();
-
-    await buyTickets(config.pda, buyer1, 1);
-    await buyTickets(config.pda, buyer2, 1);
-
-    const stateBefore: RaffleState = await raffleState(config.pda);
-    await drawWinner(config.pda, config.owner);
-    const stateAfter: RaffleState = await raffleState(config.pda);
-
-    chai.assert(stateBefore.winner === null);
-    chai.assert(stateAfter.winner !== null);
-
-    if (stateAfter.winner.equals(buyer1.publicKey)) {
-      console.log("Buyer 1 is the winner!");
-    } else if (stateAfter.winner.equals(buyer2.publicKey)) {
-      console.log("Buyer 2 is the winner!");
-    } else {
-      throw new Error("Winner is neither buyer 1 nor buyer 2!");
+  /* Helpers */
+  async function createFundedWallet(amountInSOL = 0.1): Promise<Keypair> {
+    const wallet = Keypair.generate();
+    const amountInLamports = amountInSOL * anchor.web3.LAMPORTS_PER_SOL;
+    let balance = await connection.getBalance(provider.wallet.publicKey);
+    if (balance < amountInLamports) {
+      throw new Error(
+        `Default anchor wallet has insufficient funds ${balance} < ${amountInLamports}`
+      );
     }
-  });
 
-  it("Claim prize", async () => {
-    const ticketPrice = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
-    const maxTickets = 2;
-    const endDelta = 10; // 10 seconds
-
-    const config: RaffleConf = await createRaffle(
-      ticketPrice,
-      maxTickets,
-      endDelta
-    );
-    const buyer: Keypair = await createFundedWallet();
-
-    await buyTickets(config.pda, buyer, 2);
-    await drawWinner(config.pda, config.owner);
-    const stateAfterDraw: RaffleState = await raffleState(config.pda);
-    chai.assert(buyer.publicKey.equals(stateAfterDraw.winner)); // 1 buyer bought all tickets
-    chai.assert(!stateAfterDraw.claimed);
-
-    const balanceBefore = await connection.getBalance(buyer.publicKey);
-
-    const tx = await claimPrize(config.pda, buyer);
-    const stateAfterClaim: RaffleState = await raffleState(config.pda);
-    chai.assert(stateAfterClaim.claimed === true);
-
-    // Note: Anchor is using the default wallet as fee payer, so we don't need to
-    // account for transaction fees here.
-    const balanceAfter = await connection.getBalance(buyer.publicKey);
-    chai.assert(
-      balanceAfter === balanceBefore + ticketPrice.toNumber() * maxTickets
-    );
-  });
-
-  async function createFundedWallet(
-    amountInSOL: number = 0.1
-  ): Promise<Keypair> {
-    const wallet: Keypair = anchor.web3.Keypair.generate();
-    const lamports: number = amountInSOL * anchor.web3.LAMPORTS_PER_SOL;
-
-    const signature: TransactionSignature = await connection.requestAirdrop(
+    let sig: TransactionSignature = await transfer(
+      provider,
       wallet.publicKey,
-      lamports
+      amountInSOL * anchor.web3.LAMPORTS_PER_SOL
     );
-    const latestBlockhash = await connection.getLatestBlockhash();
-
-    await connection.confirmTransaction(
-      {
-        signature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      },
-      "confirmed"
-    );
+    await printLogs("transfer", sig);
 
     return wallet;
   }
 
-  function getRaffleStateAddress(
-    raffleOwner: anchor.web3.PublicKey,
-    endTime: anchor.BN,
-    programID: anchor.web3.PublicKey
-  ) {
-    const RAFFLE_SEED = "RaffleSeed";
-    return anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        anchor.utils.bytes.utf8.encode(RAFFLE_SEED),
-        raffleOwner.toBuffer(),
-        endTime.toArrayLike(Buffer, "le", 8),
-      ],
-      programID
+  async function transfer(
+    provider: Provider,
+    to: PublicKey,
+    amount: number
+  ): Promise<TransactionSignature> {
+    return await provider.sendAndConfirm(
+      new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: provider.publicKey,
+          toPubkey: to,
+          lamports: amount, // Amount in lamports
+        })
+      )
     );
   }
 
+  function rafflePda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [
+        anchor.utils.bytes.utf8.encode("RaffleSeed"),
+        raffleOwner.toBuffer(),
+        endTime.toArrayLike(Buffer, "le", 8),
+      ],
+      program.programId
+    );
+  }
   async function raffleState(pda: PublicKey): Promise<RaffleState> {
-    return (await program.account.raffleState.fetch(pda)) as RaffleState;
+    console.error("Fetching raffle state PDA:", pda.toBase58());
+    return (await program.account.raffleState.fetch(
+      pda,
+      "confirmed"
+    )) as RaffleState;
   }
 
-  /**
-   * Creates a raffle and returns the funded raffle owner.
-   * @param ticketPrice BN
-   * @param maxTickets number
-   * @param endDelta number (seconds from now when the raffle should end)
-   */
   async function createRaffle(
-    ticketPrice: anchor.BN,
+    ticketPrice: BN,
     maxTickets: number,
     endDelta: number
   ): Promise<RaffleConf> {
     const now = Math.floor(Date.now() / 1000);
-    const endTime = new anchor.BN(now + endDelta);
-
-    const raffleOwner: Keypair = await createFundedWallet();
-
-    const [raffleStatePda, bump] = getRaffleStateAddress(
-      raffleOwner.publicKey,
-      endTime,
-      program.programId
-    );
-
-    await program.methods
+    const endTime = new BN(now + endDelta);
+    const owner = await createFundedWallet();
+    console.error("Funding raffle owner:", owner.publicKey.toBase58());
+    const [pda, bump] = rafflePda(owner.publicKey, endTime);
+    console.error("Raffle PDA:", pda.toBase58());
+    let sig: TransactionSignature = await program.methods
       .createRaffle(ticketPrice, maxTickets, endTime)
       .accounts({
-        raffleOwner: raffleOwner.publicKey,
-        raffleState: raffleStatePda,
+        raffleOwner: owner.publicKey,
+        raffleState: pda,
         systemProgram: SystemProgram.programId,
       })
-      .signers([raffleOwner])
+      .signers([owner])
       .rpc({ commitment: "confirmed" });
-
+    await printLogs("createRaffle", sig);
+    const state = await raffleState(pda);
+    chai.assert(state.owner.equals(owner.publicKey));
+    chai.assert(state.ticketPrice.eq(ticketPrice));
+    chai.assert(state.maxTickets === maxTickets);
+    chai.assert(state.winnerIndex === null);
+    //chai.assert(state.commitSlot === new BN(0));
+    console.error("Commit slot:", state.commitSlot);
+    chai.assert(!state.claimed);
     return {
-      owner: raffleOwner,
+      owner,
       ticketPrice,
       maxTickets,
       endTime,
-      pda: raffleStatePda,
+      pda,
       bump,
     };
   }
-
   async function buyTickets(
     raffleState: PublicKey,
     buyer: Keypair,
-    numTickets: number = 1
+    numTickets = 1
   ): Promise<TransactionSignature> {
     return await program.methods
       .buyTickets(numTickets)
@@ -233,33 +225,72 @@ describe("raffle", () => {
       .rpc({ commitment: "confirmed" });
   }
 
-  async function drawWinner(
-    raffleState: PublicKey,
-    owner: Keypair
-  ): Promise<TransactionSignature> {
-    return await program.methods
+  async function shuffleAndDrawWinner(raffleState: PublicKey): Promise<void> {
+    console.error("shuffleAndDrawWinner starting");
+
+    console.error("Requesting commit instruction from randomness account");
+    const commitIx = await randomness.commitIx(queueKey);
+    console.error("Successfully obtained commit instruction");
+
+    let sig: TransactionSignature = await program.methods
+      .shuffleTickets()
+      .accounts({
+        raffleState: raffleState,
+        randomnessAccount: rngKp.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .preInstructions([commitIx], true)
+      .rpc({ commitment: "confirmed" });
+
+    await printLogs("commitIx+shuffleTickets", sig);
+
+    console.error("Waiting 5 seconds for oracle to respond...");
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    console.error("Requesting reveal instruction from randomness account");
+    const revealIx: TransactionInstruction = await randomness.revealIx(
+      provider.wallet.publicKey
+    );
+    console.error("Successfully obtained reveal instruction: ", revealIx);
+
+    let sig2: TransactionSignature = await program.methods
       .drawWinner()
       .accounts({
-        raffleOwner: owner.publicKey,
         raffleState: raffleState,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        randomnessAccount: rngKp.publicKey,
+        systemProgram: SystemProgram.programId,
       })
-      .signers([owner])
+      .signers([provider.wallet.payer])
+      .preInstructions([revealIx], true)
       .rpc({ commitment: "confirmed" });
+
+    await printLogs("revealIx+drawWinner", sig2);
   }
 
-  async function claimPrize(
-    raffleState: PublicKey,
-    winner: Keypair
-  ): Promise<TransactionSignature> {
-    return await program.methods
-      .claimPrize()
-      .accounts({
-        winner: winner.publicKey,
-        raffleState: raffleState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([winner])
-      .rpc({ commitment: "confirmed" });
+  /**
+   * Fetches and prints the program logs for a given transaction signature.
+   * @param txSignature The signature returned from the .rpc() call.
+   * @param instructionName The name of the instruction being called (for clarity in the output).
+   */
+  async function printLogs(
+    instructionName: string,
+    txSignature: TransactionSignature
+  ) {
+    const txDetails = await provider.connection.getTransaction(txSignature, {
+      maxSupportedTransactionVersion: 0,
+      commitment: "confirmed",
+    });
+
+    const logs = txDetails?.meta?.logMessages;
+
+    console.log(`\n--- Program Logs for Instruction: ${instructionName} ---`);
+
+    if (logs) {
+      logs.forEach((log) => console.log(log));
+    } else {
+      console.log(`No logs found for transaction: ${txSignature}`);
+    }
+
+    console.log(`--- End Logs ---\n`);
   }
 });

@@ -8,14 +8,14 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-raffle = "H3yT9Lb96D6JsbSWQeUdMZHj6avCEnU8vJAdEot4AkWw"
+raffle = "Heymiw7KZPy5uiXyHVjUTCDtESmzZfT4rZQdiebqS8KC"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/*.ts --full-trace"

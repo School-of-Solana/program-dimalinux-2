@@ -1,4 +1,5 @@
 use anchor_lang::{prelude::*, solana_program::clock::Clock};
+use switchboard_on_demand::on_demand::accounts::randomness::RandomnessAccountData;
 
 use crate::{
     errors::RaffleError,
@@ -6,42 +7,57 @@ use crate::{
 };
 
 pub fn draw_winner_impl(ctx: Context<DrawWinner>) -> Result<()> {
-    let raffle_owner = &ctx.accounts.raffle_owner;
     let raffle_state = &mut ctx.accounts.raffle_state;
-
-    // Verify that the signer owns this particular raffle
     require!(
-        raffle_state.owner.eq(raffle_owner.key),
-        RaffleError::Unauthorized
+        raffle_state.winner_index.is_none(),
+        RaffleError::WinnerAlreadyDrawn
     );
-
-    // The raffle is over if all the tickets are sold or the end time has passed
-    let now = Clock::get()?.unix_timestamp;
     require!(
-        raffle_state.entrants.len() >= raffle_state.max_tickets as usize
-            || now >= raffle_state.end_time,
+        raffle_state.entrants.len() > 0,
+        RaffleError::RaffleStateDataInvalid
+    );
+    let clock: Clock = Clock::get()?;
+    require!(
+        raffle_state.is_raffle_over(&clock),
         RaffleError::RaffleNotEnded
     );
 
-    // Check if winner was already drawn
+    // Require that randomness was requested
     require!(
-        raffle_state.winner.is_none(),
-        RaffleError::WinnerAlreadyDrawn
+        raffle_state.commit_slot != 0,
+        RaffleError::RandomnessNotRequested
+    );
+    require!(
+        raffle_state.randomness_account != Pubkey::default(),
+        RaffleError::RandomnessNotRequested
     );
 
-    // use the clock to get a random number between 0 and the number of entrants
-    // TODO: do something better than this
-    let winner_index = now as usize % raffle_state.entrants.len();
-    let winner = raffle_state.entrants[winner_index];
+    // Verify that the provided randomness account matches the stored one
+    if ctx.accounts.randomness_account.key() != raffle_state.randomness_account {
+        return Err(RaffleError::InvalidRandomnessAccount.into());
+    }
 
-    raffle_state.winner = Some(winner);
+    // call the switchboard on-demand parse function to get the randomness data
+    let randomness_data: core::cell::Ref<RandomnessAccountData> =
+        RandomnessAccountData::parse(ctx.accounts.randomness_account.data.borrow()).unwrap();
+    if randomness_data.seed_slot != raffle_state.commit_slot {
+        return Err(RaffleError::RandomnessExpired.into());
+    }
+
+    // call the switchboard on-demand get_value function to get the revealed random value
+    let randomness: [u8; 32] = randomness_data
+        .get_value(clock.slot)
+        .map_err(|_| RaffleError::RandomnessNotResolved)?;
+
+    let random_num = usize::from_le_bytes(randomness[0..16].try_into().unwrap());
+    let winner_index = random_num % raffle_state.entrants.len();
+    raffle_state.winner_index = Some(winner_index as u32);
 
     Ok(())
 }
 
 #[derive(Accounts)]
 pub struct DrawWinner<'info> {
-    pub raffle_owner: Signer<'info>,
     #[account(
         mut,
         seeds = [
@@ -52,5 +68,7 @@ pub struct DrawWinner<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
+    /// CHECK: Must point to the Switchboard randomness account used during request
+    pub randomness_account: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }

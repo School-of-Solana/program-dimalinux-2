@@ -13,14 +13,14 @@ use crate::{
 pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
     let raffle_state = &mut ctx.accounts.raffle_state;
     let buyer = &ctx.accounts.buyer;
+    let clock = Clock::get()?;
+    require!(
+        !raffle_state.is_raffle_over(&clock),
+        RaffleError::RaffleEnded
+    );
 
-    // Check if the raffle has ended
-    let now = Clock::get()?.unix_timestamp;
-    require!(now < raffle_state.end_time, RaffleError::RaffleEnded);
-
-    if !reserve_tickets(raffle_state, buyer.key(), number_of_tickets) {
-        return Err(RaffleError::RaffleFull.into());
-    }
+    let tickets_reserved: bool = reserve_tickets(raffle_state, buyer.key(), number_of_tickets);
+    require!(tickets_reserved, RaffleError::InsufficientTicketsAvailable);
 
     // Safely compute the total price and throw an error if it overflows
     let total_price = raffle_state

@@ -9,18 +9,21 @@ pub fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
     let raffle_state = &mut ctx.accounts.raffle_state;
     let winner = &mut ctx.accounts.winner;
 
-    // Check if winner exists
+    // Check if winner exists and randomness fulfilled
     require!(
-        raffle_state.winner.is_some(),
+        raffle_state.winner_index.is_some(),
         RaffleError::WinnerNotYetDrawn
     );
+    let winner_index = raffle_state.winner_index.unwrap() as usize;
+
     require!(
-        raffle_state.winner.unwrap().eq(winner.key),
+        raffle_state.entrants[winner_index].eq(winner.key),
         RaffleError::Unauthorized
     );
+    require!(!raffle_state.claimed, RaffleError::PrizeAlreadyClaimed);
 
-    // We validated that the prize amount can never overflow in create_raffle
     let prize_amount = raffle_state.ticket_price * raffle_state.entrants.len() as u64;
+
     raffle_state.sub_lamports(prize_amount)?;
     winner.add_lamports(prize_amount)?;
     raffle_state.claimed = true;

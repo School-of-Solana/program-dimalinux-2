@@ -7,7 +7,7 @@ pub enum RaffleError {
     #[msg("Too few tickets to fulfill request")]
     TooManyTickets,
     #[msg("Raffle is full")]
-    RaffleFull,
+    InsufficientTicketsAvailable,
     #[msg("Raffle has ended")]
     RaffleEnded,
     #[msg("Raffle has not ended")]
@@ -26,4 +26,22 @@ pub enum RaffleError {
     RaffleStateDataInvalid,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Randomness not fulfilled")]
+    RandomnessNotFulfilled,
+    #[msg("Randomness request expired")]
+    RandomnessExpired,
+    #[msg("Randomness already requested")]
+    RandomnessAlreadyRequested,
+    #[msg("Randomness already revealed")]
+    RandomnessAlreadyRevealed,
+    #[msg("Randomness not yet requested")]
+    RandomnessNotRequested,
+    #[msg("Winner already selected")]
+    WinnerAlreadySelected,
+    #[msg("Randomness not resolved")]
+    RandomnessNotResolved,
+    #[msg("Invalid randomness account provided")]
+    InvalidRandomnessAccount,
+    #[msg("Raffle not claimed yet")]
+    RaffleNotClaimed,
 }
