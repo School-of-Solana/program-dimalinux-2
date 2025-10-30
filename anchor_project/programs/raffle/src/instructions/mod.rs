@@ -11,5 +11,3 @@ pub mod claim_prize;
 pub use claim_prize::*;
 
 mod close_raffle;
-pub mod shuffle_tickets;
-pub use shuffle_tickets::*;

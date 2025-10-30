@@ -16,17 +16,17 @@ pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Res
     let clock = Clock::get()?;
     require!(
         !raffle_state.is_raffle_over(&clock),
-        RaffleError::RaffleEnded
+        RaffleError::RaffleHasEnded
     );
 
     let tickets_reserved: bool = reserve_tickets(raffle_state, buyer.key(), number_of_tickets);
-    require!(tickets_reserved, RaffleError::InsufficientTicketsAvailable);
+    require!(tickets_reserved, RaffleError::RaffleIsFull);
 
     // Safely compute the total price and throw an error if it overflows
     let total_price = raffle_state
         .ticket_price
         .checked_mul(number_of_tickets as u64)
-        .ok_or(RaffleError::TooManyTickets)?;
+        .ok_or(RaffleError::InsufficientTicketsToFulfillRequest)?;
 
     // Transfer ticket price from buyer to the raffle account
     invoke(
@@ -69,7 +69,7 @@ pub struct BuyTickets<'info> {
         mut,
         seeds = [
             RAFFLE_SEED.as_bytes(),
-            raffle_state.owner.key().as_ref(),
+            raffle_state.raffle_manager.key().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump

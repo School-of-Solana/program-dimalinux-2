@@ -39,7 +39,7 @@ pub struct ClaimPrize<'info> {
         mut,
         seeds = [
             RAFFLE_SEED.as_bytes(),
-            raffle_state.owner.key().as_ref(),
+            raffle_state.raffle_manager.key().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump

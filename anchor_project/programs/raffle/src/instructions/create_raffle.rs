@@ -35,7 +35,7 @@ pub fn create_raffle_impl(
         .checked_mul(max_tickets as u64)
         .ok_or(RaffleError::RaffleTooLarge)?;
 
-    raffle_state.owner = *raffle_owner.key;
+    raffle_state.raffle_manager = *raffle_owner.key;
     raffle_state.ticket_price = ticket_price;
     raffle_state.end_time = end_time;
     raffle_state.winner_index = None;

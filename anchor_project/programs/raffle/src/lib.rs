@@ -5,7 +5,7 @@ pub mod errors;
 pub mod instructions;
 pub mod state;
 
-declare_id!("Heymiw7KZPy5uiXyHVjUTCDtESmzZfT4rZQdiebqS8KC");
+declare_id!("4LcauHsjXDZqGonxZu261YLPHV3TRsLYZ7o1pTT5q2uQ");
 
 #[program]
 pub mod raffle {
@@ -24,12 +24,15 @@ pub mod raffle {
         buy_tickets_impl(ctx, number_of_tickets)
     }
 
-    pub fn shuffle_tickets(ctx: Context<ShuffleTickets>) -> Result<()> {
-        shuffle_tickets_impl(ctx)
-    }
-
     pub fn draw_winner(ctx: Context<DrawWinner>) -> Result<()> {
         draw_winner_impl(ctx)
+    }
+
+    pub fn draw_winner_callback(
+        ctx: Context<DrawWinnerCallback>,
+        randomness: [u8; 32],
+    ) -> Result<()> {
+        draw_winner_callback_impl(ctx, randomness)
     }
 
     pub fn claim_prize(ctx: Context<ClaimPrize>) -> Result<()> {

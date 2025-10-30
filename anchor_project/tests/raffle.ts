@@ -13,11 +13,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { Raffle } from "../target/types/raffle";
-import {
-  loadSbProgram,
-  loadOrCreateRandomnessAccount,
-  setupQueue,
-} from "./utils/randomness";
 
 const PROVIDER_URL: string = "https://api.devnet.solana.com";
 
@@ -30,15 +25,14 @@ interface RaffleConf {
   bump: number;
 }
 interface RaffleState {
-  owner: PublicKey;
+  raffleManager: PublicKey;
   ticketPrice: BN;
+  maxTickets: number;
   endTime: BN;
   winnerIndex: number | null;
-  maxTickets: number;
-  entrants: PublicKey[];
-  randomnessAccount: PublicKey;
-  commitSlot: BN;
+  drawWinnerStarted: boolean;
   claimed: boolean;
+  entrants: PublicKey[];
 }
 
 const opts: ConfirmOptions = {
@@ -55,29 +49,6 @@ describe("raffle", () => {
   anchor.setProvider(provider);
   const program = anchor.workspace.raffle as Program<Raffle>;
   anchor.setProvider(provider);
-  let queueKey: PublicKey;
-  let rngKp: Keypair;
-  let randomness: Randomness;
-
-  before(async function () {
-    queueKey = await setupQueue(connection.rpcEndpoint);
-    const sbProgram = await loadSbProgram(provider);
-    // load or create randomness account
-    [randomness, rngKp] = await loadOrCreateRandomnessAccount(
-      provider,
-      sbProgram,
-      queueKey
-    );
-  });
-
-  after(async function () {
-    // console.error("Closing out randomness account");
-    // if (randomness && (await connection.getAccountInfo(randomness.pubkey))) {
-    //   await randomness.closeIx();
-    // } else {
-    //   console.warn("Randomness account does not exist on-chain, skipping closeIx.");
-    // }
-  });
 
   it.skip("Create Raffle", async () => {
     console.error("Creating Raffle");
@@ -89,10 +60,11 @@ describe("raffle", () => {
     console.error("Created raffle with state:", config.pda.toBase58());
     const state = await raffleState(config.pda);
     console.error("Created raffle with state:", state);
-    chai.assert(state.owner.equals(config.owner.publicKey));
+    chai.assert(state.raffleManager.equals(config.owner.publicKey));
     chai.assert(state.ticketPrice.eq(config.ticketPrice));
     chai.assert(state.maxTickets === config.maxTickets);
     chai.assert(state.winnerIndex === null);
+    chai.assert(!state.drawWinnerStarted);
     chai.assert(!state.claimed);
   });
 
@@ -111,9 +83,21 @@ describe("raffle", () => {
     let state: RaffleState = await raffleState(config.pda);
     chai.assert(state.maxTickets == 1);
     chai.assert(state.entrants.length == 1);
-    await shuffleAndDrawWinner(config.pda);
-    console.error("shuffled and drew winner");
-    // TODO: Test claim prize
+    await drawWinner(config.pda);
+    console.error("drew winner started");
+
+    // add a 3 second pause for the draw winner callback to complete
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+
+    state = await raffleState(config.pda);
+    console.error("Raffle state after drawing winner:", state);
+    chai.assert(state.drawWinnerStarted);
+    chai.assert(!state.claimed);
+    chai.assert(state.winnerIndex !== null);
+    chai.assert(state.entrants.length == 1);
+    chai.assert(state.entrants[state.winnerIndex!].equals(wallet.publicKey));
+
+    await claimPrize(config.pda, wallet.payer);
   });
 
   /* Helpers */
@@ -193,12 +177,11 @@ describe("raffle", () => {
       .rpc({ commitment: "confirmed" });
     await printLogs("createRaffle", sig);
     const state = await raffleState(pda);
-    chai.assert(state.owner.equals(owner.publicKey));
+    chai.assert(state.raffleManager.equals(owner.publicKey));
     chai.assert(state.ticketPrice.eq(ticketPrice));
     chai.assert(state.maxTickets === maxTickets);
     chai.assert(state.winnerIndex === null);
-    //chai.assert(state.commitSlot === new BN(0));
-    console.error("Commit slot:", state.commitSlot);
+
     chai.assert(!state.claimed);
     return {
       owner,
@@ -225,49 +208,39 @@ describe("raffle", () => {
       .rpc({ commitment: "confirmed" });
   }
 
-  async function shuffleAndDrawWinner(raffleState: PublicKey): Promise<void> {
-    console.error("shuffleAndDrawWinner starting");
-
-    console.error("Requesting commit instruction from randomness account");
-    const commitIx = await randomness.commitIx(queueKey);
-    console.error("Successfully obtained commit instruction");
+  async function drawWinner(raffleState: PublicKey): Promise<void> {
+    console.error("drawWinner starting");
 
     let sig: TransactionSignature = await program.methods
-      .shuffleTickets()
-      .accounts({
-        raffleState: raffleState,
-        randomnessAccount: rngKp.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .preInstructions([commitIx], true)
-      .rpc({ commitment: "confirmed" });
-
-    await printLogs("commitIx+shuffleTickets", sig);
-
-    console.error("Waiting 5 seconds for oracle to respond...");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-
-    console.error("Requesting reveal instruction from randomness account");
-    const revealIx: TransactionInstruction = await randomness.revealIx(
-      provider.wallet.publicKey
-    );
-    console.error("Successfully obtained reveal instruction: ", revealIx);
-
-    let sig2: TransactionSignature = await program.methods
       .drawWinner()
       .accounts({
+        oraclePayer: provider.wallet.publicKey,
         raffleState: raffleState,
-        randomnessAccount: rngKp.publicKey,
         systemProgram: SystemProgram.programId,
       })
       .signers([provider.wallet.payer])
-      .preInstructions([revealIx], true)
       .rpc({ commitment: "confirmed" });
 
-    await printLogs("revealIx+drawWinner", sig2);
+    await printLogs("drawWinner", sig);
   }
 
-  /**
+  async function claimPrize(raffleState: PublicKey, winner: Keypair): Promise<void> {
+    console.error("claimPrize starting");
+
+    const sig: TransactionSignature = await program.methods
+        .claimPrize()
+        .accounts({
+          winner: winner.publicKey,
+          raffleState: raffleState,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([winner])
+        .rpc({ commitment: "confirmed" });
+
+    await printLogs("claimPrize", sig);
+  }
+
+          /**
    * Fetches and prints the program logs for a given transaction signature.
    * @param txSignature The signature returned from the .rpc() call.
    * @param instructionName The name of the instruction being called (for clarity in the output).
