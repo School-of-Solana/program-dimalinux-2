@@ -10,4 +10,5 @@ pub use draw_winner::*;
 pub mod claim_prize;
 pub use claim_prize::*;
 
-mod close_raffle;
+pub mod close_raffle;
+pub use close_raffle::*;

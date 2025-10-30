@@ -17,4 +17,6 @@ pub enum RaffleError {
     WinnerAlreadySelected,
     DrawWinnerNotStarted,
     RaffleNotClaimed,
+    OnlyRaffleManagerCanClose,
+    CanNotCloseActiveRaffle,
 }

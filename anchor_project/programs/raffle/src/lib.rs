@@ -38,4 +38,8 @@ pub mod raffle {
     pub fn claim_prize(ctx: Context<ClaimPrize>) -> Result<()> {
         claim_prize_impl(ctx)
     }
+
+    pub fn close_raffle(ctx: Context<CloseRaffle>) -> Result<()> {
+        close_raffle_impl(ctx)
+    }
 }
