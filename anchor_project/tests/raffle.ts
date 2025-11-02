@@ -79,21 +79,8 @@ describe("raffle", () => {
 
     let pda = state2Pda(state);
 
-    let sig: TransactionSignature = await buyTickets(pda, wallet.payer, 1);
-    await printLogs("buyTickets", sig);
-
-    state = await raffleState(pda);
-    assert(state.maxTickets == 1);
-    assert(state.entrants.length == 1);
+    await buyTickets(pda, wallet.payer, 1);
     await drawWinner(pda);
-
-    state = await raffleState(pda);
-    assert(state.drawWinnerStarted);
-    assert(!state.claimed);
-    assert(state.winnerIndex !== null);
-    assert(state.entrants.length == 1);
-    assert(state.entrants[state.winnerIndex!].equals(wallet.publicKey));
-
     await claimPrize(pda, wallet.payer);
     await closeRaffle(pda, raffleManager);
     await recoverFunds(raffleManager);
@@ -152,8 +139,7 @@ describe("raffle", () => {
     return pda;
   }
 
-  async function raffleState(pda: PublicKey): Promise<RaffleState> {
-    console.error("Fetching raffle state PDA:", pda.toBase58());
+  async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
     return (await program.account.raffleState.fetch(
       pda,
       "confirmed"
@@ -164,10 +150,10 @@ describe("raffle", () => {
     raffleOwner: Keypair,
     ticketPrice: BN,
     maxTickets: number,
-    endDelta: number
+    deltaToRaffleEndSecs: number
   ): Promise<RaffleState> {
     const now = Math.floor(Date.now() / 1000);
-    const endTime = new BN(now + endDelta);
+    const endTime = new BN(now + deltaToRaffleEndSecs);
     const [pda, bump] = rafflePda(raffleOwner.publicKey, endTime);
     console.error(`Raffle PDA: ${pda.toBase58()}, bump: ${bump}`);
 
@@ -182,7 +168,7 @@ describe("raffle", () => {
 
     await printLogs("createRaffle", sig);
 
-    const state = await raffleState(pda);
+    const state = await getRaffleState(pda);
     assert(state.raffleManager.equals(raffleOwner.publicKey));
     assert(state.ticketPrice.eq(ticketPrice));
     assert(state.maxTickets === maxTickets);
@@ -199,8 +185,8 @@ describe("raffle", () => {
     raffleState: PublicKey,
     buyer: Keypair,
     numTickets = 1
-  ): Promise<TransactionSignature> {
-    return await program.methods
+  ): Promise<RaffleState> {
+    let sig = await program.methods
       .buyTickets(numTickets)
       .accounts({
         buyer: buyer.publicKey,
@@ -208,52 +194,28 @@ describe("raffle", () => {
       })
       .signers([buyer])
       .rpc({ commitment: "confirmed" });
+
+    await printLogs("buyTickets", sig);
+
+    let state = await getRaffleState(raffleState);
+    assert(state.entrants.length >= numTickets);
+    for (
+      let i = state.entrants.length - numTickets;
+      i < state.entrants.length;
+      i++
+    ) {
+      assert(state.entrants[i].equals(buyer.publicKey));
+    }
+
+    return state;
   }
 
-  async function drawWinner(
-    raffleState: PublicKey
-  ): Promise<TransactionSignature> {
+  async function drawWinner(raffleState: PublicKey): Promise<RaffleState> {
     console.log("drawWinner starting");
 
-    // Set up logs listener BEFORE sending the tx so we don't miss fast events
-    let resolved = false;
-    let eventListenerId: number;
-    const eventPromise = new Promise<void>((resolve) => {
-      eventListenerId = connection.onLogs(
-        program.programId,
-        (logsResult) => {
-          if (resolved || logsResult.err) return;
-
-          const events = eventParser.parseLogs(logsResult.logs, false);
-          for (const event of events) {
-            if (event.name === "winnerDrawnEvent") {
-              const winnerEvent = event.data as WinnerDrawnEvent;
-              if (!raffleState.equals(winnerEvent.raffleState)) continue;
-
-              console.log(
-                `winnerDrawnEvent: index=${winnerEvent.winnerIndex} winner=${winnerEvent.winner.toBase58()} tx=${logsResult.signature}`
-              );
-              resolved = true;
-              resolve();
-              break;
-            }
-          }
-        },
-        "processed"
-      );
-    });
-
-    const timeoutMs = 4000;
-    const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        if (!resolved) {
-          console.warn(
-            `Timeout waiting for winnerDrawnEvent after ${timeoutMs}ms`
-          );
-        }
-        resolve();
-      }, timeoutMs);
-    });
+    // Start listening for the callback before calling drawWinner to avoid
+    // missing the event.
+    const callbackPromise = waitForDrawWinnerCallback(raffleState);
 
     const sig: TransactionSignature = await program.methods
       .drawWinner()
@@ -266,18 +228,81 @@ describe("raffle", () => {
 
     await printLogs("drawWinner", sig);
 
-    // Wait for either the event or the timeout, whichever comes first
-    await Promise.race([eventPromise, timeoutPromise]);
+    try {
+      const callbackSig = await callbackPromise;
+      await printLogs("drawWinnerCallback", callbackSig);
+    } catch (e) {
+      // If a timeout happens, we may have just missed the winnerDrawnEvent, so
+      // we'll check the state directly before failing.
+      console.warn(e);
+    }
 
-    await connection.removeOnLogsListener(eventListenerId);
+    let state = await getRaffleState(raffleState);
+    assert(state.drawWinnerStarted);
+    assert(state.winnerIndex !== null);
+    assert(
+      state.winnerIndex! >= 0 && state.winnerIndex! < state.entrants.length
+    );
 
-    return sig;
+    return state;
+  }
+
+  // Listen for the `winnerDrawnEvent` on our specific raffle to
+  // detect when the `drawWinnerCallback` has been executed by
+  // the VRF. We log the winner and returns the transaction
+  // signature of the callback transaction.
+  async function waitForDrawWinnerCallback(
+    raffleState: PublicKey
+  ): Promise<TransactionSignature> {
+    const timeoutMs = 5000;
+    let listenerId: number | null = null;
+
+    async function cancelListener(): Promise<void> {
+      if (listenerId !== null) {
+        await connection.removeOnLogsListener(listenerId);
+        listenerId = null;
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cancelListener();
+        reject(new Error("Timeout waiting for winnerDrawnEvent"));
+      }, timeoutMs);
+
+      // We have to use the more complicated connection.onLogs listener instead
+      // of program.addEventListener, because the drawWinnerCallback instruction
+      // is called via by from the VRF program. I'm not clear if the limitation
+      // is due to CPI use or if it's because the transaction is not sent by us.
+      listenerId = connection.onLogs(
+        program.programId,
+        (logsResult) => {
+          if (logsResult.err) return;
+          const events = eventParser.parseLogs(logsResult.logs, false);
+          for (const event of events) {
+            if (event.name === "winnerDrawnEvent") {
+              const e = event.data as WinnerDrawnEvent;
+              if (!raffleState.equals(e.raffleState)) continue;
+              clearTimeout(timeout);
+              cancelListener();
+              console.log(
+                `winnerDrawnEvent: index=${
+                  e.winnerIndex
+                } winner=${e.winner.toBase58()}`
+              );
+              return resolve(logsResult.signature);
+            }
+          }
+        },
+        "processed"
+      );
+    });
   }
 
   async function claimPrize(
     raffleState: PublicKey,
     winner: Keypair
-  ): Promise<void> {
+  ): Promise<RaffleState> {
     console.error("claimPrize starting");
 
     const sig: TransactionSignature = await program.methods
@@ -290,6 +315,13 @@ describe("raffle", () => {
       .rpc({ commitment: "confirmed" });
 
     await printLogs("claimPrize", sig);
+
+    let state = await getRaffleState(raffleState);
+    assert(state.claimed);
+    assert(state.winnerIndex !== null);
+    assert(winner.publicKey.equals(state.entrants[state.winnerIndex!]));
+
+    return state;
   }
 
   async function closeRaffle(
