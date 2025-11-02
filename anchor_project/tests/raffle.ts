@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import { assert } from "chai";
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorProvider, BN, Program, Provider } from "@coral-xyz/anchor";
 import {
@@ -11,6 +11,7 @@ import {
   ConfirmOptions,
   Commitment,
   LAMPORTS_PER_SOL,
+  Message,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { Raffle } from "../target/types/raffle";
@@ -28,6 +29,12 @@ interface RaffleState {
   entrants: PublicKey[];
 }
 
+interface WinnerDrawnEvent {
+  raffleState: anchor.web3.PublicKey;
+  winnerIndex: number; // u32 becomes number
+  winner: anchor.web3.PublicKey;
+}
+
 const opts: ConfirmOptions = {
   preflightCommitment: "confirmed",
   commitment: "confirmed",
@@ -41,7 +48,7 @@ describe("raffle", () => {
   const provider = new AnchorProvider(connection, wallet, opts);
   anchor.setProvider(provider);
   const program = anchor.workspace.raffle as Program<Raffle>;
-  anchor.setProvider(provider);
+  const eventParser = new anchor.EventParser(program.programId, program.coder);
 
   it("Create Raffle", async () => {
     const raffleManager = await createFundedWallet(0.5);
@@ -54,10 +61,7 @@ describe("raffle", () => {
       300
     );
 
-    const [statePDA, statePDABump] = rafflePda(
-      state.raffleManager,
-      state.endTime
-    );
+    const [statePDA] = rafflePda(state.raffleManager, state.endTime);
 
     await closeRaffle(statePDA, raffleManager);
     await recoverFunds(raffleManager);
@@ -79,21 +83,16 @@ describe("raffle", () => {
     await printLogs("buyTickets", sig);
 
     state = await raffleState(pda);
-    chai.assert(state.maxTickets == 1);
-    chai.assert(state.entrants.length == 1);
+    assert(state.maxTickets == 1);
+    assert(state.entrants.length == 1);
     await drawWinner(pda);
-    console.error("drew winner started");
-
-    // add a 3 second pause for the draw winner callback to complete
-    await new Promise((resolve) => setTimeout(resolve, 6000));
 
     state = await raffleState(pda);
-    console.error("Raffle state after drawing winner:", state);
-    chai.assert(state.drawWinnerStarted);
-    chai.assert(!state.claimed);
-    chai.assert(state.winnerIndex !== null);
-    chai.assert(state.entrants.length == 1);
-    chai.assert(state.entrants[state.winnerIndex!].equals(wallet.publicKey));
+    assert(state.drawWinnerStarted);
+    assert(!state.claimed);
+    assert(state.winnerIndex !== null);
+    assert(state.entrants.length == 1);
+    assert(state.entrants[state.winnerIndex!].equals(wallet.publicKey));
 
     await claimPrize(pda, wallet.payer);
     await closeRaffle(pda, raffleManager);
@@ -184,14 +183,14 @@ describe("raffle", () => {
     await printLogs("createRaffle", sig);
 
     const state = await raffleState(pda);
-    chai.assert(state.raffleManager.equals(raffleOwner.publicKey));
-    chai.assert(state.ticketPrice.eq(ticketPrice));
-    chai.assert(state.maxTickets === maxTickets);
-    chai.assert(state.endTime.eq(endTime));
-    chai.assert(state.winnerIndex === null);
-    chai.assert(!state.drawWinnerStarted);
-    chai.assert(!state.claimed);
-    chai.assert(state.entrants.length === 0);
+    assert(state.raffleManager.equals(raffleOwner.publicKey));
+    assert(state.ticketPrice.eq(ticketPrice));
+    assert(state.maxTickets === maxTickets);
+    assert(state.endTime.eq(endTime));
+    assert(state.winnerIndex === null);
+    assert(!state.drawWinnerStarted);
+    assert(!state.claimed);
+    assert(state.entrants.length === 0);
 
     return state;
   }
@@ -211,10 +210,52 @@ describe("raffle", () => {
       .rpc({ commitment: "confirmed" });
   }
 
-  async function drawWinner(raffleState: PublicKey): Promise<void> {
-    console.error("drawWinner starting");
+  async function drawWinner(
+    raffleState: PublicKey
+  ): Promise<TransactionSignature> {
+    console.log("drawWinner starting");
 
-    let sig: TransactionSignature = await program.methods
+    // Set up logs listener BEFORE sending the tx so we don't miss fast events
+    let resolved = false;
+    let eventListenerId: number;
+    const eventPromise = new Promise<void>((resolve) => {
+      eventListenerId = connection.onLogs(
+        program.programId,
+        (logsResult) => {
+          if (resolved || logsResult.err) return;
+
+          const events = eventParser.parseLogs(logsResult.logs, false);
+          for (const event of events) {
+            if (event.name === "winnerDrawnEvent") {
+              const winnerEvent = event.data as WinnerDrawnEvent;
+              if (!raffleState.equals(winnerEvent.raffleState)) continue;
+
+              console.log(
+                `winnerDrawnEvent: index=${winnerEvent.winnerIndex} winner=${winnerEvent.winner.toBase58()} tx=${logsResult.signature}`
+              );
+              resolved = true;
+              resolve();
+              break;
+            }
+          }
+        },
+        "processed"
+      );
+    });
+
+    const timeoutMs = 4000;
+    const timeoutPromise = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        if (!resolved) {
+          console.warn(
+            `Timeout waiting for winnerDrawnEvent after ${timeoutMs}ms`
+          );
+        }
+        resolve();
+      }, timeoutMs);
+    });
+
+    const sig: TransactionSignature = await program.methods
       .drawWinner()
       .accounts({
         oraclePayer: provider.wallet.publicKey,
@@ -224,6 +265,13 @@ describe("raffle", () => {
       .rpc({ commitment: "confirmed" });
 
     await printLogs("drawWinner", sig);
+
+    // Wait for either the event or the timeout, whichever comes first
+    await Promise.race([eventPromise, timeoutPromise]);
+
+    await connection.removeOnLogsListener(eventListenerId);
+
+    return sig;
   }
 
   async function claimPrize(
@@ -292,8 +340,14 @@ describe("raffle", () => {
     const connection = provider.connection;
     const destination = provider.wallet.publicKey;
 
-    let sig = await sweepSol(connection, tmpWallet, destination);
-    await printLogs("sweepSol", sig);
+    const sig = await sweepSol(connection, tmpWallet, destination);
+    if (sig) {
+      await printLogs("sweepSol", sig);
+    } else {
+      console.error(
+        `No sweep transaction created for ${tmpWallet.publicKey.toBase58()}`
+      );
+    }
   }
 });
 
@@ -311,10 +365,9 @@ async function sweepSol(
   fromWallet: Keypair,
   toWallet: PublicKey,
   commitment: Commitment = "confirmed"
-): Promise<TransactionSignature> {
+): Promise<TransactionSignature | null> {
   const tempWalletPublicKey = fromWallet.publicKey;
 
-  // 1. Fetch the current balance of the temporary wallet
   const balanceInLamports = await connection.getBalance(
     tempWalletPublicKey,
     commitment
@@ -322,16 +375,16 @@ async function sweepSol(
 
   if (balanceInLamports === 0) {
     console.log(
-      `🧹 Source wallet ${tempWalletPublicKey.toBase58()} has zero SOL. Nothing to sweep.`
+      `Wallet ${tempWalletPublicKey.toBase58()} has zero SOL. Nothing to sweep.`
     );
-    return "N/A (Zero Balance)";
+    return null;
   }
 
   // --- FEE CALCULATION STRATEGY ---
   // 2. Create a placeholder transaction to estimate the fee.
   // The fee is based on the transaction structure (number of signatures/instructions),
   // not the amount being transferred. We use a minimal transfer (1 lamport) as a placeholder.
-  const feeTransaction = new Transaction().add(
+  const feeTransaction: Transaction = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: tempWalletPublicKey,
       toPubkey: toWallet,
@@ -346,7 +399,7 @@ async function sweepSol(
   ).blockhash;
 
   // 3. Compile the message and use getFeeForMessage to get the exact fee
-  const message = feeTransaction.compileMessage();
+  const message: Message = feeTransaction.compileMessage();
   const feeResult = await connection.getFeeForMessage(message, commitment);
 
   if (feeResult.value === null) {
@@ -356,11 +409,6 @@ async function sweepSol(
   }
 
   const requiredFee = feeResult.value;
-  console.log(
-    `Transaction Fee required: ${requiredFee} lamports (${
-      requiredFee / LAMPORTS_PER_SOL
-    } SOL)`
-  );
 
   // 4. Calculate the maximum sweep amount
   const sweepAmount = balanceInLamports - requiredFee;
@@ -371,7 +419,7 @@ async function sweepSol(
     console.error(
       `❌ Insufficient funds to cover the fee. Balance (${balanceInLamports}) < Fee (${requiredFee}). Sweep not possible.`
     );
-    return "N/A (Insufficient Funds)";
+    return null;
   }
 
   console.log(`Total Balance: ${balanceInLamports} lamports`);
@@ -398,15 +446,18 @@ async function sweepSol(
   ).blockhash;
   finalTransaction.feePayer = tempWalletPublicKey;
 
-  // 6. Sign and send the transaction
-  const signature = await sendAndConfirmTransaction(
+  const sig: TransactionSignature = await sendAndConfirmTransaction(
     connection,
     finalTransaction,
     [fromWallet], // Signer must be the temporary wallet
     { commitment: commitment }
   );
 
-  console.log(`✅ Sweep successful!`);
-  console.log(`Transaction Signature: ${signature}`);
-  return signature;
+  console.log(
+    `Swept ${sweepAmount / LAMPORTS_PER_SOL} SOL (fee ${
+      requiredFee / LAMPORTS_PER_SOL
+    } SOL) from ${fromWallet.publicKey} to ${toWallet}`
+  );
+
+  return sig;
 }

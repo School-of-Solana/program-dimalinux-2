@@ -73,12 +73,18 @@ pub fn draw_winner_callback_impl(
         .iter()
         .map(|byte| format!("{:02x}", byte))
         .collect();
-    msg!("Consuming random number: 0x{}", randomness_str);
+    msg!("Received random data: 0x{}", randomness_str);
 
     let random_num = ephemeral_vrf_sdk::rnd::random_u64(&randomness) as usize;
     let winner_index = random_num % raffle_state.entrants.len();
     raffle_state.winner_index = Some(winner_index as u32);
-    msg!("Winner index drawn: {}", winner_index);
+
+    emit!(WinnerDrawnEvent {
+        raffle_state: raffle_state.key(),
+        winner_index: winner_index as u32,
+        winner: raffle_state.entrants[winner_index],
+    });
+
     Ok(())
 }
 
@@ -120,4 +126,11 @@ pub struct DrawWinnerCallback<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
+}
+
+#[event]
+pub struct WinnerDrawnEvent {
+    pub raffle_state: Pubkey,
+    pub winner_index: u32,
+    pub winner: Pubkey,
 }
