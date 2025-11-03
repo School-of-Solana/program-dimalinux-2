@@ -1,6 +1,6 @@
 import { assert } from "chai";
 import * as anchor from "@coral-xyz/anchor";
-import { AnchorProvider, BN, Program, Provider } from "@coral-xyz/anchor";
+import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
@@ -12,6 +12,7 @@ import {
   createFundedWallet,
   printLogs,
   recoverFunds,
+  solToLamports,
 } from "./utils/test_utils";
 import { Raffle } from "../target/types/raffle";
 
@@ -51,7 +52,7 @@ describe("raffle", () => {
 
   it("Full Raffle", async () => {
     const raffleManager = await createFundedWallet(provider, 0.5);
-    const ticketPrice = new BN(0.00001 * anchor.web3.LAMPORTS_PER_SOL);
+    const ticketPrice = solToLamports(0.00001);
     let state: RaffleState = await createRaffle(
       raffleManager,
       ticketPrice,
@@ -68,21 +69,39 @@ describe("raffle", () => {
     await recoverFunds(provider, raffleManager);
   });
 
-  it("Create Raffle", async () => {
-    const raffleManager = await createFundedWallet(provider, 0.5);
-    console.error("Creating Raffle");
+  it("Create Raffle Error: RaffleEndTimeInPast", async () => {
+    const deltaToRaffleEndSecs: number = -10; // delta in past
 
-    const state = await createRaffle(
-      raffleManager,
-      new BN(0.0001 * anchor.web3.LAMPORTS_PER_SOL),
-      5,
-      300
-    );
+    try {
+      await createRaffle(
+        provider.wallet.payer,
+        solToLamports(0.00001),
+        10,
+        deltaToRaffleEndSecs
+      );
+      assert.fail("Expected createRaffle to fail with RaffleEndTimeInPast");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "RaffleEndTimeInPast");
+    }
+  });
 
-    const [statePDA] = rafflePda(state.raffleManager, state.endTime);
+  it("Create Raffle Error: RaffleTooLarge", async () => {
+    const ticketPrice = new BN("18446744073709551615"); // u64::MAX
+    const maxTickets = 2;
 
-    await closeRaffle(statePDA, raffleManager);
-    await recoverFunds(provider, raffleManager);
+    try {
+      await createRaffle(
+        provider.wallet.payer,
+        ticketPrice,
+        maxTickets,
+        120
+      );
+      assert.fail("Expected createRaffle to fail with RaffleTooLarge");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "RaffleTooLarge");
+    }
   });
 
   function rafflePda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {

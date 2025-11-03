@@ -10,7 +10,7 @@ import {
   Transaction,
   TransactionSignature,
 } from "@solana/web3.js";
-import { AnchorProvider } from "@coral-xyz/anchor";
+import { AnchorProvider, BN } from "@coral-xyz/anchor";
 
 /**
  * Fetches and prints the program logs for a given transaction signature.
@@ -57,7 +57,7 @@ export async function createFundedWallet(
   const connection: Connection = provider.connection;
   const fundingWallet = provider.wallet;
   const newWallet = Keypair.generate();
-  const amountInLamports = amountInSOL * LAMPORTS_PER_SOL;
+  const amountInLamports = solToLamports(amountInSOL).toNumber();
 
   let balance = await connection.getBalance(fundingWallet.publicKey);
   if (balance < amountInLamports) {
@@ -171,9 +171,9 @@ export async function sweepSol(
 
   console.log(`Total Balance: ${balanceInLamports} lamports`);
   console.log(
-    `Sweep Amount: ${maxSweepAmount} lamports (${
-      maxSweepAmount / LAMPORTS_PER_SOL
-    } SOL)`
+    `Sweep Amount: ${maxSweepAmount} lamports (${lamportsToSol(
+      maxSweepAmount
+    )} SOL)`
   );
   console.log(`Destination: ${toWallet.toBase58()}`);
 
@@ -199,10 +199,28 @@ export async function sweepSol(
   );
 
   console.log(
-    `Swept ${maxSweepAmount / LAMPORTS_PER_SOL} SOL (fee ${
-      requiredFee / LAMPORTS_PER_SOL
-    } SOL) from ${fromWallet.publicKey} to ${toWallet}`
+    `Swept ${lamportsToSol(maxSweepAmount)} SOL (fee ${lamportsToSol(
+      requiredFee
+    )} SOL) from ${fromWallet.publicKey} to ${toWallet}`
   );
 
   return sig;
+}
+
+/**
+ * Converts SOL to lamports.
+ * @param sol Amount in SOL (can be a decimal value).
+ * @returns The equivalent amount in lamports as a BN.
+ */
+export function solToLamports(sol: number): BN {
+  return new BN(sol * LAMPORTS_PER_SOL);
+}
+
+/**
+ * Converts lamports to SOL.
+ * @param lamports Amount in lamports.
+ * @returns The equivalent amount in SOL.
+ */
+export function lamportsToSol(lamports: number): number {
+  return lamports / LAMPORTS_PER_SOL;
 }

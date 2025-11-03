@@ -15,7 +15,7 @@ pub struct RaffleState {
     pub max_tickets: u32,
     /// Raffle end time as Unix timestamp (seconds). No new tickets may be
     /// bought after this time; drawing is allowed once this time is reached.
-    pub end_time: i64,             // Solana's UnixTimestamp uses i64, not u64
+    pub end_time: i64,
     /// Index of the winner in `entrants` once drawn; `None` until selected.
     pub winner_index: Option<u32>, // index of the winner in the entrants vec
     /// Whether `draw_winner` has been invoked and the VRF flow started.

@@ -3,7 +3,6 @@ use anchor_lang::prelude::*;
 #[error_code]
 pub enum RaffleError {
     RaffleEndTimeInPast,
-    InsufficientTicketsToFulfillRequest,
     RaffleIsFull,
     RaffleHasEnded,
     RaffleNotOver,

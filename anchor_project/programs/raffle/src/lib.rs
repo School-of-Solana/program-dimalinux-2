@@ -62,8 +62,7 @@ pub mod raffle {
     /// Errors:
     /// - `RaffleError::RaffleHasEnded`: attempting to buy after the raffle end time.
     /// - `RaffleError::RaffleIsFull`: the purchase would exceed `max_tickets`.
-    /// - `RaffleError::InsufficientTicketsToFulfillRequest`: overflow computing
-    ///   `ticket_price * number_of_tickets` (treated as an invalid request).
+    /// - `RaffleError::RaffleTooLarge`: `ticket_price * number_of_tickets` overflowed.
     pub fn buy_tickets(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
         buy_tickets_impl(ctx, number_of_tickets)
     }

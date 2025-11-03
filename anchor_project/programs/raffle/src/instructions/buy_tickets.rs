@@ -26,7 +26,7 @@ pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Res
     let total_price = raffle_state
         .ticket_price
         .checked_mul(number_of_tickets as u64)
-        .ok_or(RaffleError::InsufficientTicketsToFulfillRequest)?;
+        .ok_or(RaffleError::RaffleTooLarge)?;
 
     // Transfer ticket price from buyer to the raffle account
     invoke(
