@@ -63,8 +63,10 @@ pub fn reserve_tickets(
 
 #[derive(Accounts)]
 pub struct BuyTickets<'info> {
+    /// Buyer paying for tickets; must sign.
     #[account(mut)]
     pub buyer: Signer<'info>,
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; receives ticket lamports.
     #[account(
         mut,
         seeds = [
@@ -75,5 +77,6 @@ pub struct BuyTickets<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
+    /// System program (transfer lamports).
     pub system_program: Program<'info, System>,
 }

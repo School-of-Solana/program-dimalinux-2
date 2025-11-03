@@ -2,16 +2,27 @@ use anchor_lang::prelude::*;
 
 pub const RAFFLE_SEED: &str = "RaffleSeed";
 
-/// `RaffleState` ...
+/// Raffle state account stored as a PDA. Tracks configuration and lifecycle
+/// of a single raffle instance.
 #[account]
 pub struct RaffleState {
+    /// The manager/creator of the raffle. The only party that can close the
+    /// raffle to receive the rent refund.
     pub raffle_manager: Pubkey,
+    /// Ticket price in lamports.
     pub ticket_price: u64,
+    /// Maximum number of tickets/entrants allowed.
     pub max_tickets: u32,
+    /// Raffle end time as Unix timestamp (seconds). No new tickets may be
+    /// bought after this time; drawing is allowed once this time is reached.
     pub end_time: i64,             // Solana's UnixTimestamp uses i64, not u64
+    /// Index of the winner in `entrants` once drawn; `None` until selected.
     pub winner_index: Option<u32>, // index of the winner in the entrants vec
+    /// Whether `draw_winner` has been invoked and the VRF flow started.
     pub draw_winner_started: bool,
+    /// Whether the prize has been claimed by the selected winner.
     pub claimed: bool,
+    /// Entrant public keys, one entry per ticket purchased.
     pub entrants: Vec<Pubkey>,
 }
 

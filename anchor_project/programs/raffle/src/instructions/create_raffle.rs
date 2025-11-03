@@ -49,8 +49,11 @@ pub fn create_raffle_impl(
 #[derive(Accounts)]
 #[instruction(ticket_price: u64, max_tickets: u32, end_time: i64)]
 pub struct CreateRaffle<'info> {
+    /// Raffle manager and payer for account initialization.
     #[account(mut)]
     pub raffle_owner: Signer<'info>,
+    /// Raffle state PDA initialized with seeds [RAFFLE_SEED, raffle_owner, end_time].
+    /// Space is derived from max_tickets; rent paid by `raffle_owner`.
     #[account(
         init,
         payer = raffle_owner,
@@ -63,6 +66,7 @@ pub struct CreateRaffle<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
+    /// System program.
     pub system_program: Program<'info, System>,
 }
 

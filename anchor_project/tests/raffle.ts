@@ -9,11 +9,8 @@ import {
   Transaction,
   TransactionSignature,
   ConfirmOptions,
-  Commitment,
-  LAMPORTS_PER_SOL,
-  Message,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
+import {printLogs, recoverFunds, sweepSol} from "./utils/test_utils";
 import { Raffle } from "../target/types/raffle";
 
 const PROVIDER_URL: string = "https://api.devnet.solana.com";
@@ -30,9 +27,9 @@ interface RaffleState {
 }
 
 interface WinnerDrawnEvent {
-  raffleState: anchor.web3.PublicKey;
-  winnerIndex: number; // u32 becomes number
-  winner: anchor.web3.PublicKey;
+  raffleState: PublicKey;
+  winnerIndex: number;
+  winner: PublicKey;
 }
 
 const opts: ConfirmOptions = {
@@ -64,7 +61,7 @@ describe("raffle", () => {
     const [statePDA] = rafflePda(state.raffleManager, state.endTime);
 
     await closeRaffle(statePDA, raffleManager);
-    await recoverFunds(raffleManager);
+    await recoverFunds(provider, raffleManager);
   });
 
   it("Full Raffle", async () => {
@@ -83,7 +80,7 @@ describe("raffle", () => {
     await drawWinner(pda);
     await claimPrize(pda, wallet.payer);
     await closeRaffle(pda, raffleManager);
-    await recoverFunds(raffleManager);
+    await recoverFunds(provider, raffleManager);
   });
 
   /* Helpers */
@@ -102,7 +99,7 @@ describe("raffle", () => {
       wallet.publicKey,
       amountInSOL * anchor.web3.LAMPORTS_PER_SOL
     );
-    await printLogs("transfer", sig);
+    await printLogs("transfer", connection, sig);
 
     return wallet;
   }
@@ -166,7 +163,7 @@ describe("raffle", () => {
       .signers([raffleOwner])
       .rpc({ commitment: "confirmed" });
 
-    await printLogs("createRaffle", sig);
+    await printLogs("createRaffle", connection, sig);
 
     const state = await getRaffleState(pda);
     assert(state.raffleManager.equals(raffleOwner.publicKey));
@@ -195,19 +192,15 @@ describe("raffle", () => {
       .signers([buyer])
       .rpc({ commitment: "confirmed" });
 
-    await printLogs("buyTickets", sig);
+    await printLogs("buyTickets", connection, sig);
 
     let state = await getRaffleState(raffleState);
     assert(state.entrants.length >= numTickets);
-    for (
-      let i = state.entrants.length - numTickets;
-      i < state.entrants.length;
-      i++
-    ) {
+    let start = state.entrants.length - numTickets;
+    let end = state.entrants.length;
+    for (let i = start; i < end; i++) {
       assert(state.entrants[i].equals(buyer.publicKey));
     }
-
-    return state;
   }
 
   async function drawWinner(raffleState: PublicKey): Promise<RaffleState> {
@@ -226,11 +219,11 @@ describe("raffle", () => {
       .signers([provider.wallet.payer])
       .rpc({ commitment: "confirmed" });
 
-    await printLogs("drawWinner", sig);
+    await printLogs("drawWinner", connection, sig);
 
     try {
       const callbackSig = await callbackPromise;
-      await printLogs("drawWinnerCallback", callbackSig);
+      await printLogs("drawWinnerCallback", connection, callbackSig);
     } catch (e) {
       // If a timeout happens, we may have just missed the winnerDrawnEvent, so
       // we'll check the state directly before failing.
@@ -314,7 +307,7 @@ describe("raffle", () => {
       .signers([winner])
       .rpc({ commitment: "confirmed" });
 
-    await printLogs("claimPrize", sig);
+    await printLogs("claimPrize", connection, sig);
 
     let state = await getRaffleState(raffleState);
     assert(state.claimed);
@@ -339,157 +332,7 @@ describe("raffle", () => {
       .signers([raffle_manager])
       .rpc({ commitment: "confirmed" });
 
-    await printLogs("closeRaffle", sig);
+    await printLogs("closeRaffle", connection, sig);
   }
 
-  /**
-   * Fetches and prints the program logs for a given transaction signature.
-   * @param txSignature The signature returned from the .rpc() call.
-   * @param instructionName The name of the instruction being called (for clarity in the output).
-   */
-  async function printLogs(
-    instructionName: string,
-    txSignature: TransactionSignature
-  ) {
-    const txDetails = await provider.connection.getTransaction(txSignature, {
-      maxSupportedTransactionVersion: 0,
-      commitment: "confirmed",
-    });
-
-    const logs = txDetails?.meta?.logMessages;
-
-    console.log(`\n--- Program Logs for Instruction: ${instructionName} ---`);
-
-    if (logs) {
-      logs.forEach((log) => console.log(log));
-    } else {
-      console.log(`No logs found for transaction: ${txSignature}`);
-    }
-
-    console.log(`--- End Logs ---\n`);
-  }
-  async function recoverFunds(tmpWallet: Keypair): Promise<void> {
-    const connection = provider.connection;
-    const destination = provider.wallet.publicKey;
-
-    const sig = await sweepSol(connection, tmpWallet, destination);
-    if (sig) {
-      await printLogs("sweepSol", sig);
-    } else {
-      console.error(
-        `No sweep transaction created for ${tmpWallet.publicKey.toBase58()}`
-      );
-    }
-  }
 });
-
-/**
- * Sweeps all remaining SOL from a source wallet into a destination public key,
- * automatically calculating and deducting the transaction fee.
- * @param connection - The Solana Connection object.
- * @param fromWallet - The Keypair of the source wallet (the one to be swept).
- * @param toWallet - The PublicKey of the destination wallet.
- * @param commitment - The desired commitment level for the transaction.
- * @returns The transaction signature.
- */
-async function sweepSol(
-  connection: Connection,
-  fromWallet: Keypair,
-  toWallet: PublicKey,
-  commitment: Commitment = "confirmed"
-): Promise<TransactionSignature | null> {
-  const tempWalletPublicKey = fromWallet.publicKey;
-
-  const balanceInLamports = await connection.getBalance(
-    tempWalletPublicKey,
-    commitment
-  );
-
-  if (balanceInLamports === 0) {
-    console.log(
-      `Wallet ${tempWalletPublicKey.toBase58()} has zero SOL. Nothing to sweep.`
-    );
-    return null;
-  }
-
-  // --- FEE CALCULATION STRATEGY ---
-  // 2. Create a placeholder transaction to estimate the fee.
-  // The fee is based on the transaction structure (number of signatures/instructions),
-  // not the amount being transferred. We use a minimal transfer (1 lamport) as a placeholder.
-  const feeTransaction: Transaction = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: tempWalletPublicKey,
-      toPubkey: toWallet,
-      lamports: 1, // Placeholder amount for fee calculation
-    })
-  );
-
-  // Set the fee payer and recent blockhash, essential for compilation
-  feeTransaction.feePayer = tempWalletPublicKey;
-  feeTransaction.recentBlockhash = (
-    await connection.getLatestBlockhash(commitment)
-  ).blockhash;
-
-  // 3. Compile the message and use getFeeForMessage to get the exact fee
-  const message: Message = feeTransaction.compileMessage();
-  const feeResult = await connection.getFeeForMessage(message, commitment);
-
-  if (feeResult.value === null) {
-    throw new Error(
-      "Failed to get fee estimate. Blockhash might be too old or invalid."
-    );
-  }
-
-  const requiredFee = feeResult.value;
-
-  // 4. Calculate the maximum sweep amount
-  const sweepAmount = balanceInLamports - requiredFee;
-
-  if (sweepAmount <= 0) {
-    // This case occurs if the balance is exactly equal to or less than the fee.
-    // The wallet cannot afford the transfer.
-    console.error(
-      `❌ Insufficient funds to cover the fee. Balance (${balanceInLamports}) < Fee (${requiredFee}). Sweep not possible.`
-    );
-    return null;
-  }
-
-  console.log(`Total Balance: ${balanceInLamports} lamports`);
-  console.log(
-    `Sweep Amount: ${sweepAmount} lamports (${
-      sweepAmount / LAMPORTS_PER_SOL
-    } SOL)`
-  );
-  console.log(`Destination: ${toWallet.toBase58()}`);
-
-  // --- FINAL TRANSACTION ---
-  // 5. Create the final transaction with the exact sweep amount
-  const finalTransaction = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: tempWalletPublicKey,
-      toPubkey: toWallet,
-      lamports: sweepAmount, // The exact calculated amount
-    })
-  );
-
-  // Re-fetch the latest blockhash just before sending
-  finalTransaction.recentBlockhash = (
-    await connection.getLatestBlockhash(commitment)
-  ).blockhash;
-  finalTransaction.feePayer = tempWalletPublicKey;
-
-  const sig: TransactionSignature = await sendAndConfirmTransaction(
-    connection,
-    finalTransaction,
-    [fromWallet], // Signer must be the temporary wallet
-    { commitment: commitment }
-  );
-
-  console.log(
-    `Swept ${sweepAmount / LAMPORTS_PER_SOL} SOL (fee ${
-      requiredFee / LAMPORTS_PER_SOL
-    } SOL) from ${fromWallet.publicKey} to ${toWallet}`
-  );
-
-  return sig;
-}

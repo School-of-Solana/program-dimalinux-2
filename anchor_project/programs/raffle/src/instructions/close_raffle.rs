@@ -21,8 +21,10 @@ pub fn close_raffle_impl(_ctx: Context<CloseRaffle>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct CloseRaffle<'info> {
+    /// Raffle manager; must sign. Receives the rent refund when account closes.
     #[account(mut)]
     pub raffle_manager: Signer<'info>,
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; closed to `raffle_manager`.
     #[account(
         mut,
         close = raffle_manager,

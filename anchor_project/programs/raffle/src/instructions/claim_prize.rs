@@ -33,8 +33,10 @@ pub fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct ClaimPrize<'info> {
+    /// Winner must sign to receive prize lamports.
     #[account(mut)]
     pub winner: Signer<'info>,
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; pays prize to winner and flips `claimed`.
     #[account(
         mut,
         seeds = [
@@ -45,5 +47,6 @@ pub struct ClaimPrize<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
+    /// System program.
     pub system_program: Program<'info, System>,
 }

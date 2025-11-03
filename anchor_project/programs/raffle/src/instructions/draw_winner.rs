@@ -91,8 +91,10 @@ pub fn draw_winner_callback_impl(
 #[vrf]
 #[derive(Accounts)]
 pub struct DrawWinner<'info> {
+    /// Payer for the VRF request and any CPI fees; must sign.
     #[account(mut)]
     pub oracle_payer: Signer<'info>,
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; marked started and used as VRF caller seed.
     #[account(
         mut,
         seeds = [
@@ -103,9 +105,10 @@ pub struct DrawWinner<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
-    /// CHECK: The oracle queue
+    /// CHECK: The oracle queue to use (address constrained to DEFAULT_QUEUE).
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
+    /// System program.
     pub system_program: Program<'info, System>, // TODO: is this needed?
 }
 
@@ -116,6 +119,7 @@ pub struct DrawWinnerCallback<'info> {
     /// through CPI.
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; mutated to set winner.
     #[account(
         mut,
         seeds = [
@@ -129,8 +133,17 @@ pub struct DrawWinnerCallback<'info> {
 }
 
 #[event]
+/// Emitted when a winner has been selected for a raffle.
+///
+/// Fields:
+/// - `raffle_state`: the raffle state PDA for which the winner was drawn.
+/// - `winner_index`: index into `entrants` vector for the winning entry.
+/// - `winner`: public key of the winning entrant.
 pub struct WinnerDrawnEvent {
+    /// Raffle state PDA for which the winner was drawn.
     pub raffle_state: Pubkey,
+    /// Index into `entrants` corresponding to the winner.
     pub winner_index: u32,
+    /// Winner's public key.
     pub winner: Pubkey,
 }
