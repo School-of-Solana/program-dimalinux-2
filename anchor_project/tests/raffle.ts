@@ -5,12 +5,14 @@ import {
   Connection,
   Keypair,
   PublicKey,
-  SystemProgram,
-  Transaction,
   TransactionSignature,
   ConfirmOptions,
 } from "@solana/web3.js";
-import {printLogs, recoverFunds, sweepSol} from "./utils/test_utils";
+import {
+  createFundedWallet,
+  printLogs,
+  recoverFunds,
+} from "./utils/test_utils";
 import { Raffle } from "../target/types/raffle";
 
 const PROVIDER_URL: string = "https://api.devnet.solana.com";
@@ -47,25 +49,8 @@ describe("raffle", () => {
   const program = anchor.workspace.raffle as Program<Raffle>;
   const eventParser = new anchor.EventParser(program.programId, program.coder);
 
-  it("Create Raffle", async () => {
-    const raffleManager = await createFundedWallet(0.5);
-    console.error("Creating Raffle");
-
-    const state = await createRaffle(
-      raffleManager,
-      new BN(0.0001 * anchor.web3.LAMPORTS_PER_SOL),
-      5,
-      300
-    );
-
-    const [statePDA] = rafflePda(state.raffleManager, state.endTime);
-
-    await closeRaffle(statePDA, raffleManager);
-    await recoverFunds(provider, raffleManager);
-  });
-
   it("Full Raffle", async () => {
-    const raffleManager = await createFundedWallet(0.5);
+    const raffleManager = await createFundedWallet(provider, 0.5);
     const ticketPrice = new BN(0.00001 * anchor.web3.LAMPORTS_PER_SOL);
     let state: RaffleState = await createRaffle(
       raffleManager,
@@ -83,42 +68,22 @@ describe("raffle", () => {
     await recoverFunds(provider, raffleManager);
   });
 
-  /* Helpers */
-  async function createFundedWallet(amountInSOL = 0.1): Promise<Keypair> {
-    const wallet = Keypair.generate();
-    const amountInLamports = amountInSOL * anchor.web3.LAMPORTS_PER_SOL;
-    let balance = await connection.getBalance(provider.wallet.publicKey);
-    if (balance < amountInLamports) {
-      throw new Error(
-        `Default anchor wallet has insufficient funds ${balance} < ${amountInLamports}`
-      );
-    }
+  it("Create Raffle", async () => {
+    const raffleManager = await createFundedWallet(provider, 0.5);
+    console.error("Creating Raffle");
 
-    let sig: TransactionSignature = await transfer(
-      provider,
-      wallet.publicKey,
-      amountInSOL * anchor.web3.LAMPORTS_PER_SOL
+    const state = await createRaffle(
+      raffleManager,
+      new BN(0.0001 * anchor.web3.LAMPORTS_PER_SOL),
+      5,
+      300
     );
-    await printLogs("transfer", connection, sig);
 
-    return wallet;
-  }
+    const [statePDA] = rafflePda(state.raffleManager, state.endTime);
 
-  async function transfer(
-    provider: Provider,
-    to: PublicKey,
-    amount: number
-  ): Promise<TransactionSignature> {
-    return await provider.sendAndConfirm(
-      new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: provider.publicKey,
-          toPubkey: to,
-          lamports: amount, // Amount in lamports
-        })
-      )
-    );
-  }
+    await closeRaffle(statePDA, raffleManager);
+    await recoverFunds(provider, raffleManager);
+  });
 
   function rafflePda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
@@ -201,6 +166,8 @@ describe("raffle", () => {
     for (let i = start; i < end; i++) {
       assert(state.entrants[i].equals(buyer.publicKey));
     }
+
+    return state;
   }
 
   async function drawWinner(raffleState: PublicKey): Promise<RaffleState> {
@@ -334,5 +301,4 @@ describe("raffle", () => {
 
     await printLogs("closeRaffle", connection, sig);
   }
-
 });
