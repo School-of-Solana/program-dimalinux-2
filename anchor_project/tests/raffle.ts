@@ -143,7 +143,7 @@ describe("raffle", () => {
       provider.wallet.payer,
       solToLamports(0.00001),
       1,
-      2
+      120
     );
     let pda = state2Pda(state);
 
@@ -157,6 +157,79 @@ describe("raffle", () => {
     }
 
     // We can close the raffle early since no tickets were sold
+    await closeRaffle(pda, wallet.payer);
+  });
+
+  it("drawWinner fails: NoEntrants", async () => {
+    let state = await createRaffle(
+      provider.wallet.payer,
+      solToLamports(0.00001),
+      1,
+      2
+    );
+    let pda = state2Pda(state);
+
+    try {
+      await drawWinner(pda);
+      assert.fail("Expected drawWinner to fail with NoEntrants");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "NoEntrants");
+    }
+
+    await closeRaffle(pda, wallet.payer);
+  });
+
+  it("drawWinner fails: RaffleNotOver", async () => {
+    let state = await createRaffle(
+      provider.wallet.payer,
+      solToLamports(0.00001),
+      2,
+      120
+    );
+    let pda = state2Pda(state);
+
+    // Buy 1 ticket, so we bypass the NoEntrants check
+    await buyTickets(state2Pda(state), provider.wallet.payer, 1);
+
+    try {
+      await drawWinner(pda);
+      assert.fail("Expected drawWinner to fail with RaffleNotOver");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "RaffleNotOver");
+    }
+
+    // Buy the 2nd ticket to end the raffle and allow cleanup
+    await buyTickets(pda, provider.wallet.payer, 1);
+    await drawWinner(pda);
+    await claimPrize(pda, wallet.payer.publicKey);
+    await closeRaffle(pda, wallet.payer);
+  });
+
+  it("drawWinner fails: WinnerAlreadyDrawn", async () => {
+    let state = await createRaffle(
+      provider.wallet.payer,
+      solToLamports(0.00001),
+      1,
+      120
+    );
+    let pda = state2Pda(state);
+
+    await buyTickets(pda, provider.wallet.payer, 1);
+    await drawWinner(pda);
+
+    try {
+      // 2nd call to drawWinner
+      await drawWinner(pda);
+      assert.fail("Expected drawWinner to fail with WinnerAlreadyDrawn");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "WinnerAlreadyDrawn");
+    }
+
+    // Clean up
+    await claimPrize(pda, wallet.payer.publicKey);
     await closeRaffle(pda, wallet.payer);
   });
 
@@ -329,7 +402,7 @@ describe("raffle", () => {
             }
           }
         },
-        "processed"
+        "confirmed"
       );
     });
   }

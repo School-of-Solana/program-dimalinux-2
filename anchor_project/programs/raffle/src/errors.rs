@@ -2,21 +2,29 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum RaffleError {
+    // create_raffle errors
     RaffleEndTimeInPast,
-    InsufficientTickets,
-    RaffleHasEnded,
-    RaffleNotOver,
-    WinnerNotYetDrawn,
-    WinnerAlreadyDrawn,
-    PrizeAlreadyClaimed,
+    MaxTicketsIsZero,
     RaffleTooLarge,
-    RaffleStateAccountTooSmall,
+
+    // buy_tickets errors
+    RaffleHasEnded,
+    InsufficientTickets,
+
+    // draw_winner errors
+    WinnerAlreadyDrawn,
+    RaffleNotOver,
     NoEntrants,
-    Unauthorized,
-    WinnerAlreadySelected,
+
+    // draw_winner_callback errors
     DrawWinnerNotStarted,
-    RaffleNotClaimed,
+
+    // claim_prize errors
+    WinnerNotYetDrawn,
+    Unauthorized,
+    PrizeAlreadyClaimed,
+
+    // close_raffle errors
     OnlyRaffleManagerCanClose,
     CanNotCloseActiveRaffle,
-    MaxTicketsIsZero,
 }
