@@ -96,6 +96,7 @@ pub mod raffle {
     /// Errors:
     /// - `RaffleError::DrawWinnerNotStarted`: the draw process was not started
     ///   (i.e., `draw_winner` was not called successfully before the callback).
+    /// - `RaffleError::WinnerAlreadyDrawn`: a winner has already been set by a previous callback.
     pub fn draw_winner_callback(
         ctx: Context<DrawWinnerCallback>,
         randomness: [u8; 32],

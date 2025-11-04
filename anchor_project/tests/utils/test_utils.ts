@@ -10,7 +10,36 @@ import {
   Transaction,
   TransactionSignature,
 } from "@solana/web3.js";
-import { AnchorProvider, BN } from "@coral-xyz/anchor";
+import { AnchorProvider, AnchorError, BN } from "@coral-xyz/anchor";
+import { assert } from "chai";
+
+/**
+ * Helper function to assert that an async function throws an Anchor error with
+ * a specific error code.
+ * @param fn The async function to execute
+ * @param expectedErrorCode The expected Anchor error code (e.g., "RaffleEndTimeInPast")
+ * @param expectedOrigin Optional expected origin field for constraint errors
+ */
+export async function assertAnchorError(
+  fn: () => Promise<any>,
+  expectedErrorCode: string,
+  expectedOrigin?: string
+): Promise<void> {
+  try {
+    await fn();
+    assert.fail(`Expected function to fail with ${expectedErrorCode}`);
+  } catch (err) {
+    assert.instanceOf(err, AnchorError);
+    assert.strictEqual(err.error.errorCode.code, expectedErrorCode);
+    // Note: if a constraint is violated by annotations on the instruction
+    // context, the 'origin' field will be set to the field name. When
+    // the error is thrown by `require!` checks, 'origin' is an object
+    // that contains the file/line number.
+    if (expectedOrigin !== undefined) {
+      assert.strictEqual(err.error.origin, expectedOrigin);
+    }
+  }
+}
 
 /**
  * Fetches and prints the program logs for a given transaction signature.

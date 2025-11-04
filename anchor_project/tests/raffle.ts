@@ -13,10 +13,15 @@ import {
   printLogs,
   recoverFunds,
   solToLamports,
+  assertAnchorError,
 } from "./utils/test_utils";
 import { Raffle } from "../target/types/raffle";
 
 const PROVIDER_URL: string = "https://api.devnet.solana.com";
+
+// const VRF_PROGRAM_IDENTITY = new PublicKey(
+//   "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+// );
 
 interface RaffleState {
   raffleManager: PublicKey;
@@ -69,76 +74,42 @@ describe("raffle", () => {
     await recoverFunds(provider, raffleManager);
   });
 
-  it("createRaffle fails: RaffleEndTimeInPast", async () => {
-    const deltaToRaffleEndSecs: number = -10; // delta in past
-
-    try {
-      await createRaffle(
-        provider.wallet.payer,
-        solToLamports(0.00001),
-        10,
-        deltaToRaffleEndSecs
-      );
-      assert.fail("Expected createRaffle to fail with RaffleEndTimeInPast");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "RaffleEndTimeInPast");
-    }
-  });
-
-  it("createRaffle fails: MaxTicketsIsZero", async () => {
-    try {
-      await createRaffle(
-        provider.wallet.payer,
-        solToLamports(0.00001),
-        0, // maxTickets is zero triggering error
-        120
-      );
-      assert.fail("Expected createRaffle to fail with MaxTicketsIsZero");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "MaxTicketsIsZero");
-    }
-  });
-
-  it("createRaffle fails: RaffleTooLarge", async () => {
-    const ticketPrice = new BN("18446744073709551615"); // u64::MAX
-    const maxTickets = 2;
-
-    try {
-      await createRaffle(provider.wallet.payer, ticketPrice, maxTickets, 120);
-      assert.fail("Expected createRaffle to fail with RaffleTooLarge");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "RaffleTooLarge");
-    }
-  });
-
-  it("buyTickets fails: RaffleHasEnded", async () => {
-    let state = await createRaffle(
-      provider.wallet.payer,
-      solToLamports(0.00001),
-      1,
-      2
+  it("createRaffle negative tests", async () => {
+    await assertAnchorError(
+      () =>
+        createRaffle(
+          provider.wallet.payer,
+          solToLamports(0.00001),
+          10,
+          -10 // delta in past
+        ),
+      "RaffleEndTimeInPast"
     );
-    let pda = state2Pda(state);
-    // Buy the last ticket to end the raffle
-    await buyTickets(pda, provider.wallet.payer, 1);
 
-    try {
-      await buyTickets(state2Pda(state), provider.wallet.payer, 1);
-      assert.fail("Expected buyTickets to fail with RaffleHasEnded");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "RaffleHasEnded");
-    }
+    await assertAnchorError(
+      () =>
+        createRaffle(
+          provider.wallet.payer,
+          solToLamports(0.00001),
+          0, // maxTickets is zero
+          120
+        ),
+      "MaxTicketsIsZero"
+    );
 
-    await drawWinner(pda);
-    await claimPrize(pda, wallet.payer.publicKey);
-    await closeRaffle(pda, wallet.payer);
+    await assertAnchorError(
+      () =>
+        createRaffle(
+          provider.wallet.payer,
+          new BN("18446744073709551615"), // u64::MAX
+          2,
+          120
+        ),
+      "RaffleTooLarge"
+    );
   });
 
-  it("buyTickets fails: InsufficientTickets", async () => {
+  it("buyTickets negative tests", async () => {
     let state = await createRaffle(
       provider.wallet.payer,
       solToLamports(0.00001),
@@ -148,39 +119,26 @@ describe("raffle", () => {
     let pda = state2Pda(state);
 
     // Buy 2 tickets when only 1 is available
-    try {
-      await buyTickets(state2Pda(state), provider.wallet.payer, 2);
-      assert.fail("Expected buyTickets to fail with InsufficientTickets");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "InsufficientTickets");
-    }
-
-    // We can close the raffle early since no tickets were sold
-    await closeRaffle(pda, wallet.payer);
-  });
-
-  it("drawWinner fails: NoEntrants", async () => {
-    let state = await createRaffle(
-      provider.wallet.payer,
-      solToLamports(0.00001),
-      1,
-      2
+    await assertAnchorError(
+      () => buyTickets(pda, provider.wallet.payer, 2),
+      "InsufficientTickets"
     );
-    let pda = state2Pda(state);
 
-    try {
-      await drawWinner(pda);
-      assert.fail("Expected drawWinner to fail with NoEntrants");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "NoEntrants");
-    }
+    // Buy the last ticket to end the raffle
+    await buyTickets(pda, provider.wallet.payer, 1);
 
+    // Try to buy another ticket after raffle is full
+    await assertAnchorError(
+      () => buyTickets(pda, provider.wallet.payer, 1),
+      "RaffleHasEnded"
+    );
+
+    await drawWinner(pda);
+    await claimPrize(pda, wallet.payer.publicKey);
     await closeRaffle(pda, wallet.payer);
   });
 
-  it("drawWinner fails: RaffleNotOver", async () => {
+  it("drawWinner negative tests", async () => {
     let state = await createRaffle(
       provider.wallet.payer,
       solToLamports(0.00001),
@@ -189,46 +147,40 @@ describe("raffle", () => {
     );
     let pda = state2Pda(state);
 
+    // Test NoEntrants error
+    await assertAnchorError(() => drawWinner(pda), "NoEntrants");
+
     // Buy 1 ticket, so we bypass the NoEntrants check
-    await buyTickets(state2Pda(state), provider.wallet.payer, 1);
-
-    try {
-      await drawWinner(pda);
-      assert.fail("Expected drawWinner to fail with RaffleNotOver");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "RaffleNotOver");
-    }
-
-    // Buy the 2nd ticket to end the raffle and allow cleanup
     await buyTickets(pda, provider.wallet.payer, 1);
-    await drawWinner(pda);
-    await claimPrize(pda, wallet.payer.publicKey);
-    await closeRaffle(pda, wallet.payer);
-  });
 
-  it("drawWinner fails: WinnerAlreadyDrawn", async () => {
-    let state = await createRaffle(
-      provider.wallet.payer,
-      solToLamports(0.00001),
-      1,
-      120
+    // Test RaffleNotOver error
+    await assertAnchorError(() => drawWinner(pda), "RaffleNotOver");
+
+    // Buy the 2nd ticket to end the raffle
+    await buyTickets(pda, provider.wallet.payer, 1);
+
+    // Test ConstraintAddress error with invalid oracle queue
+    await assertAnchorError(
+      () =>
+        program.methods
+          .drawWinner()
+          .accounts({
+            oraclePayer: provider.wallet.publicKey,
+            raffleState: pda,
+            oracleQueue: PublicKey.unique(), // Invalid oracle queue
+          })
+          .signers([provider.wallet.payer])
+          .rpc({ commitment: "confirmed" }),
+      "ConstraintAddress",
+      "oracle_queue"
     );
-    let pda = state2Pda(state);
 
-    await buyTickets(pda, provider.wallet.payer, 1);
+    // Successful drawWinner call
     await drawWinner(pda);
 
-    try {
-      // 2nd call to drawWinner
-      await drawWinner(pda);
-      assert.fail("Expected drawWinner to fail with WinnerAlreadyDrawn");
-    } catch (err) {
-      assert(err instanceof anchor.AnchorError);
-      assert.equal(err.error.errorCode.code, "WinnerAlreadyDrawn");
-    }
+    // Test WinnerAlreadyDrawn error from drawWinner
+    await assertAnchorError(() => drawWinner(pda), "WinnerAlreadyDrawn");
 
-    // Clean up
     await claimPrize(pda, wallet.payer.publicKey);
     await closeRaffle(pda, wallet.payer);
   });
@@ -279,14 +231,14 @@ describe("raffle", () => {
     await printLogs("createRaffle", connection, sig);
 
     const state = await getRaffleState(pda);
-    assert(state.raffleManager.equals(raffleOwner.publicKey));
-    assert(state.ticketPrice.eq(ticketPrice));
-    assert(state.maxTickets === maxTickets);
-    assert(state.endTime.eq(endTime));
-    assert(state.winnerIndex === null);
-    assert(!state.drawWinnerStarted);
-    assert(!state.claimed);
-    assert(state.entrants.length === 0);
+    assert.isTrue(state.raffleManager.equals(raffleOwner.publicKey));
+    assert.isTrue(state.ticketPrice.eq(ticketPrice));
+    assert.strictEqual(state.maxTickets, maxTickets);
+    assert.isTrue(state.endTime.eq(endTime));
+    assert.isNull(state.winnerIndex);
+    assert.isFalse(state.drawWinnerStarted);
+    assert.isFalse(state.claimed);
+    assert.strictEqual(state.entrants.length, 0);
 
     return state;
   }
@@ -308,11 +260,11 @@ describe("raffle", () => {
     await printLogs("buyTickets", connection, sig);
 
     let state = await getRaffleState(raffleState);
-    assert(state.entrants.length >= numTickets);
+    assert.isAtLeast(state.entrants.length, numTickets);
     let start = state.entrants.length - numTickets;
     let end = state.entrants.length;
     for (let i = start; i < end; i++) {
-      assert(state.entrants[i].equals(buyer.publicKey));
+      assert.isTrue(state.entrants[i].equals(buyer.publicKey));
     }
 
     return state;
@@ -346,9 +298,9 @@ describe("raffle", () => {
     }
 
     let state = await getRaffleState(raffleState);
-    assert(state.drawWinnerStarted);
-    assert(state.winnerIndex !== null);
-    assert(
+    assert.isTrue(state.drawWinnerStarted);
+    assert.isNotNull(state.winnerIndex);
+    assert.isTrue(
       state.winnerIndex! >= 0 && state.winnerIndex! < state.entrants.length
     );
 
@@ -362,7 +314,7 @@ describe("raffle", () => {
   async function waitForDrawWinnerCallback(
     raffleState: PublicKey
   ): Promise<TransactionSignature> {
-    const timeoutMs = 5000;
+    const timeoutMs = 8000;
     let listenerId: number | null = null;
 
     async function cancelListener(): Promise<void> {
@@ -424,9 +376,9 @@ describe("raffle", () => {
     await printLogs("claimPrize", connection, sig);
 
     let state = await getRaffleState(raffleState);
-    assert(state.claimed);
-    assert(state.winnerIndex !== null);
-    assert(winner.equals(state.entrants[state.winnerIndex!]));
+    assert.isTrue(state.claimed);
+    assert.isNotNull(state.winnerIndex);
+    assert.isTrue(winner.equals(state.entrants[state.winnerIndex!]));
 
     return state;
   }

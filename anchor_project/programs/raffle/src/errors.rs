@@ -18,6 +18,7 @@ pub enum RaffleError {
 
     // draw_winner_callback errors
     DrawWinnerNotStarted,
+    // WinnerAlreadyDrawn (reused)
 
     // claim_prize errors
     WinnerNotYetDrawn,

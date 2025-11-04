@@ -7,8 +7,8 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-raffle = "Heymiw7KZPy5uiXyHVjUTCDtESmzZfT4rZQdiebqS8KC"
+[programs.devnet]
+raffle = "4LcauHsjXDZqGonxZu261YLPHV3TRsLYZ7o1pTT5q2uQ"
 
 [registry]
 url = "https://api.apr.dev"

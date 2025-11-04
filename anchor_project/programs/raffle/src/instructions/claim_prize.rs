@@ -50,6 +50,4 @@ pub struct ClaimPrize<'info> {
         bump
     )]
     pub raffle_state: Account<'info, RaffleState>,
-    /// System program.
-    pub system_program: Program<'info, System>,
 }
