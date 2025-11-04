@@ -19,14 +19,23 @@ pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Res
         RaffleError::RaffleHasEnded
     );
 
-    let tickets_reserved: bool = reserve_tickets(raffle_state, buyer.key(), number_of_tickets);
-    require!(tickets_reserved, RaffleError::RaffleIsFull);
+    // Check if there are enough tickets available
+    // (overflow impossible: entrants.len() bounded by max_tickets which is u32)
+    let new_total = raffle_state
+        .entrants
+        .len()
+        .checked_add(number_of_tickets as usize)
+        .unwrap();
+    require!(
+        new_total <= raffle_state.max_tickets as usize,
+        RaffleError::InsufficientTickets
+    );
 
-    // Safely compute the total price and throw an error if it overflows
+    // Compute total price (overflow prevented by create_raffle checks)
     let total_price = raffle_state
         .ticket_price
         .checked_mul(number_of_tickets as u64)
-        .ok_or(RaffleError::RaffleTooLarge)?;
+        .unwrap();
 
     // Transfer ticket price from buyer to the raffle account
     invoke(
@@ -38,27 +47,12 @@ pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Res
         &[buyer.to_account_info(), raffle_state.to_account_info()],
     )?;
 
-    Ok(())
-}
-
-pub fn reserve_tickets(
-    raffle_state: &mut Account<RaffleState>,
-    buyer: Pubkey,
-    num_tickets: u32,
-) -> bool {
-    if let Some(new_total) = raffle_state
+    // Reserve tickets for the buyer
+    raffle_state
         .entrants
-        .len()
-        .checked_add(num_tickets as usize)
-    {
-        if new_total <= raffle_state.max_tickets as usize {
-            raffle_state
-                .entrants
-                .extend(iter::repeat(buyer).take(num_tickets as usize));
-            return true;
-        }
-    }
-    false
+        .extend(iter::repeat(buyer.key()).take(number_of_tickets as usize));
+
+    Ok(())
 }
 
 #[derive(Accounts)]

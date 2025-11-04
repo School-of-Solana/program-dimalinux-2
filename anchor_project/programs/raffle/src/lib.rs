@@ -61,8 +61,7 @@ pub mod raffle {
     ///
     /// Errors:
     /// - `RaffleError::RaffleHasEnded`: attempting to buy after the raffle end time.
-    /// - `RaffleError::RaffleIsFull`: the purchase would exceed `max_tickets`.
-    /// - `RaffleError::RaffleTooLarge`: `ticket_price * number_of_tickets` overflowed.
+    /// - `RaffleError::InsufficientTickets`: the purchase would exceed available tickets.
     pub fn buy_tickets(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
         buy_tickets_impl(ctx, number_of_tickets)
     }
@@ -104,8 +103,8 @@ pub mod raffle {
     }
 
     /// Transfers the total prize pool to the winner and marks the raffle as
-    /// claimed. Can only be called by the winner after the winner has been
-    /// drawn.
+    /// claimed. Can be called by anyone after the winner has been drawn; the
+    /// prize is always sent to the correct winner as determined by the VRF.
     ///
     /// Emits: none
     ///
@@ -113,7 +112,7 @@ pub mod raffle {
     ///
     /// Errors:
     /// - `RaffleError::WinnerNotYetDrawn`: no winner has been selected yet.
-    /// - `RaffleError::Unauthorized`: the caller is not the selected winner.
+    /// - `RaffleError::Unauthorized`: the provided winner account does not match the selected winner.
     /// - `RaffleError::PrizeAlreadyClaimed`: the prize was already claimed.
     pub fn claim_prize(ctx: Context<ClaimPrize>) -> Result<()> {
         claim_prize_impl(ctx)

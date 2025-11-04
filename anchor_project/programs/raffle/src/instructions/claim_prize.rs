@@ -33,9 +33,12 @@ pub fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct ClaimPrize<'info> {
-    /// Winner must sign to receive prize lamports.
+    /// Winner receives prize lamports. Anyone can trigger the claim on behalf
+    /// of the winner.
+    /// CHECK: Winner is validated against raffle_state.entrants[winner_index]
+    /// in the instruction logic.
     #[account(mut)]
-    pub winner: Signer<'info>,
+    pub winner: UncheckedAccount<'info>,
     /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; pays prize to winner and flips `claimed`.
     #[account(
         mut,

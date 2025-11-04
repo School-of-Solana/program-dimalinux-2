@@ -50,7 +50,7 @@ describe("raffle", () => {
   const program = anchor.workspace.raffle as Program<Raffle>;
   const eventParser = new anchor.EventParser(program.programId, program.coder);
 
-  it("Full Raffle", async () => {
+  it("Full Raffle Success", async () => {
     const raffleManager = await createFundedWallet(provider, 0.5);
     const ticketPrice = solToLamports(0.00001);
     let state: RaffleState = await createRaffle(
@@ -64,12 +64,12 @@ describe("raffle", () => {
 
     await buyTickets(pda, wallet.payer, 1);
     await drawWinner(pda);
-    await claimPrize(pda, wallet.payer);
+    await claimPrize(pda, wallet.payer.publicKey);
     await closeRaffle(pda, raffleManager);
     await recoverFunds(provider, raffleManager);
   });
 
-  it("Create Raffle Error: RaffleEndTimeInPast", async () => {
+  it("createRaffle fails: RaffleEndTimeInPast", async () => {
     const deltaToRaffleEndSecs: number = -10; // delta in past
 
     try {
@@ -86,22 +86,63 @@ describe("raffle", () => {
     }
   });
 
-  it("Create Raffle Error: RaffleTooLarge", async () => {
+  it("createRaffle fails: RaffleTooLarge", async () => {
     const ticketPrice = new BN("18446744073709551615"); // u64::MAX
     const maxTickets = 2;
 
     try {
-      await createRaffle(
-        provider.wallet.payer,
-        ticketPrice,
-        maxTickets,
-        120
-      );
+      await createRaffle(provider.wallet.payer, ticketPrice, maxTickets, 120);
       assert.fail("Expected createRaffle to fail with RaffleTooLarge");
     } catch (err) {
       assert(err instanceof anchor.AnchorError);
       assert.equal(err.error.errorCode.code, "RaffleTooLarge");
     }
+  });
+
+  it("buyTickets fails: RaffleHasEnded", async () => {
+    let state = await createRaffle(
+      provider.wallet.payer,
+      solToLamports(0.00001),
+      1,
+      2
+    );
+    let pda = state2Pda(state);
+    // Buy the last ticket to end the raffle
+    await buyTickets(pda, provider.wallet.payer, 1);
+
+    try {
+      await buyTickets(state2Pda(state), provider.wallet.payer, 1);
+      assert.fail("Expected buyTickets to fail with RaffleHasEnded");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "RaffleHasEnded");
+    }
+
+    await drawWinner(pda);
+    await claimPrize(pda, wallet.payer.publicKey);
+    await closeRaffle(pda, wallet.payer);
+  });
+
+  it("buyTickets fails: InsufficientTickets", async () => {
+    let state = await createRaffle(
+      provider.wallet.payer,
+      solToLamports(0.00001),
+      1,
+      2
+    );
+    let pda = state2Pda(state);
+
+    // Buy 2 tickets when only 1 is available
+    try {
+      await buyTickets(state2Pda(state), provider.wallet.payer, 2);
+      assert.fail("Expected buyTickets to fail with InsufficientTickets");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "InsufficientTickets");
+    }
+
+    // We can close the raffle early since no tickets were sold
+    await closeRaffle(pda, wallet.payer);
   });
 
   function rafflePda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {
@@ -280,17 +321,16 @@ describe("raffle", () => {
 
   async function claimPrize(
     raffleState: PublicKey,
-    winner: Keypair
+    winner: PublicKey
   ): Promise<RaffleState> {
     console.error("claimPrize starting");
 
     const sig: TransactionSignature = await program.methods
       .claimPrize()
       .accounts({
-        winner: winner.publicKey,
+        winner: winner,
         raffleState: raffleState,
       })
-      .signers([winner])
       .rpc({ commitment: "confirmed" });
 
     await printLogs("claimPrize", connection, sig);
@@ -298,7 +338,7 @@ describe("raffle", () => {
     let state = await getRaffleState(raffleState);
     assert(state.claimed);
     assert(state.winnerIndex !== null);
-    assert(winner.publicKey.equals(state.entrants[state.winnerIndex!]));
+    assert(winner.equals(state.entrants[state.winnerIndex!]));
 
     return state;
   }
