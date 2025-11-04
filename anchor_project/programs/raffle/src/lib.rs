@@ -40,6 +40,7 @@ pub mod raffle {
     /// Errors:
     /// - `RaffleError::RaffleEndTimeInPast`: the provided `end_time` must be in the
     ///   future relative to the cluster clock.
+    /// - `RaffleError::MaxTicketsIsZero`: `max_tickets` must be at least 1.
     /// - `RaffleError::RaffleTooLarge`: the computed maximum prize pool
     ///   (`ticket_price * max_tickets`) overflowed `u64`.
     pub fn create_raffle(
@@ -76,8 +77,8 @@ pub mod raffle {
     ///
     /// Errors:
     /// - `RaffleError::WinnerAlreadyDrawn`: a winner has already been selected.
-    /// - `RaffleError::RaffleStateDataInvalid`: there are no entrants.
     /// - `RaffleError::RaffleNotOver`: the raffle has not reached its end time yet.
+    /// - `RaffleError::NoEntrants`: there are no entrants in the raffle.
     pub fn draw_winner(ctx: Context<DrawWinner>) -> Result<()> {
         draw_winner_impl(ctx)
     }

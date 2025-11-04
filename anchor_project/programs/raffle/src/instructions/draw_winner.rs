@@ -24,15 +24,12 @@ pub fn draw_winner_impl(ctx: Context<DrawWinner>) -> Result<()> {
         raffle_state.winner_index.is_none(),
         RaffleError::WinnerAlreadyDrawn
     );
-    require!(
-        raffle_state.entrants.len() > 0,
-        RaffleError::RaffleStateDataInvalid
-    );
     let clock: Clock = Clock::get()?;
     require!(
         raffle_state.is_raffle_over(&clock),
         RaffleError::RaffleNotOver
     );
+    require!(raffle_state.entrants.len() > 0, RaffleError::NoEntrants);
 
     raffle_state.draw_winner_started = true;
 

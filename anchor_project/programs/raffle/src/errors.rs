@@ -11,11 +11,12 @@ pub enum RaffleError {
     PrizeAlreadyClaimed,
     RaffleTooLarge,
     RaffleStateAccountTooSmall,
-    RaffleStateDataInvalid,
+    NoEntrants,
     Unauthorized,
     WinnerAlreadySelected,
     DrawWinnerNotStarted,
     RaffleNotClaimed,
     OnlyRaffleManagerCanClose,
     CanNotCloseActiveRaffle,
+    MaxTicketsIsZero,
 }

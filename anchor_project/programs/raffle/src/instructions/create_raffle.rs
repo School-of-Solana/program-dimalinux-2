@@ -16,6 +16,7 @@ pub fn create_raffle_impl(
 ) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     require!(end_time > now, RaffleError::RaffleEndTimeInPast);
+    require!(max_tickets > 0, RaffleError::MaxTicketsIsZero);
     let raffle_owner = &ctx.accounts.raffle_owner;
     let raffle_state = &mut ctx.accounts.raffle_state;
     msg!("New state account: {}", raffle_state.key());

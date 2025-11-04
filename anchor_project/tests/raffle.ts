@@ -86,6 +86,21 @@ describe("raffle", () => {
     }
   });
 
+  it("createRaffle fails: MaxTicketsIsZero", async () => {
+    try {
+      await createRaffle(
+        provider.wallet.payer,
+        solToLamports(0.00001),
+        0, // maxTickets is zero triggering error
+        120
+      );
+      assert.fail("Expected createRaffle to fail with MaxTicketsIsZero");
+    } catch (err) {
+      assert(err instanceof anchor.AnchorError);
+      assert.equal(err.error.errorCode.code, "MaxTicketsIsZero");
+    }
+  });
+
   it("createRaffle fails: RaffleTooLarge", async () => {
     const ticketPrice = new BN("18446744073709551615"); // u64::MAX
     const maxTickets = 2;
