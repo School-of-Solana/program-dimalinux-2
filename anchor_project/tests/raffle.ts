@@ -63,7 +63,7 @@ describe("raffle", () => {
       ticketPrice,
       1,
       120
-    ); // 5s end
+    );
 
     let pda = state2Pda(state);
 
@@ -183,6 +183,75 @@ describe("raffle", () => {
 
     await claimPrize(pda, wallet.payer.publicKey);
     await closeRaffle(pda, wallet.payer);
+  });
+
+  it("claimPrize negative tests", async () => {
+    const alice = await createFundedWallet(provider, 0.1);
+    const mallory = await createFundedWallet(provider, 0.1);
+    const ticketPrice = solToLamports(0.00001);
+
+    let state: RaffleState = await createRaffle(
+      provider.wallet.payer,
+      ticketPrice,
+      3,
+      120
+    );
+
+    let pda = state2Pda(state);
+
+    // Alice buys all 3 tickets
+    await buyTickets(pda, alice, 3);
+
+    await assertAnchorError(
+      () => claimPrize(pda, alice.publicKey),
+      "WinnerNotYetDrawn"
+    );
+
+    await drawWinner(pda);
+
+    await assertAnchorError(
+      () => claimPrize(pda, mallory.publicKey),
+      "Unauthorized"
+    );
+
+    await claimPrize(pda, alice.publicKey);
+    await closeRaffle(pda, provider.wallet.payer);
+    await recoverFunds(provider, alice);
+    await recoverFunds(provider, mallory);
+  });
+
+  it("closeRaffle negative tests", async () => {
+    const manager = await createFundedWallet(provider, 0.1);
+    const notManager = await createFundedWallet(provider, 0.1);
+
+    let state: RaffleState = await createRaffle(
+      manager,
+      solToLamports(0.00001),
+      2,
+      120
+    );
+
+    let pda = state2Pda(state);
+
+    await assertAnchorError(
+      () => closeRaffle(pda, notManager),
+      "OnlyRaffleManagerCanClose"
+    );
+
+    await buyTickets(pda, notManager, 1);
+
+    await assertAnchorError(
+      () => closeRaffle(pda, manager),
+      "CanNotCloseActiveRaffle"
+    );
+
+    // buy the last ticket to end the raffle
+    await buyTickets(pda, notManager, 1);
+    await drawWinner(pda);
+    await claimPrize(pda, notManager.publicKey);
+    await closeRaffle(pda, manager);
+    await recoverFunds(provider, manager);
+    await recoverFunds(provider, notManager);
   });
 
   function rafflePda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {

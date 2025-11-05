@@ -1,23 +1,16 @@
 use anchor_lang::prelude::*;
+use ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY;
 
 use crate::{
     errors::RaffleError,
     state::{RaffleState, RAFFLE_SEED},
 };
 
-use ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY;
-
 pub fn draw_winner_callback_impl(
     ctx: Context<DrawWinnerCallback>,
     randomness: [u8; 32],
 ) -> Result<()> {
     let raffle_state = &mut ctx.accounts.raffle_state;
-
-    let randomness_str: String = randomness
-        .iter()
-        .map(|byte| format!("{:02x}", byte))
-        .collect();
-    msg!("Received random data: 0x{}", randomness_str);
 
     let random_num = ephemeral_vrf_sdk::rnd::random_u64(&randomness) as usize;
     let winner_index = random_num % raffle_state.entrants.len();
