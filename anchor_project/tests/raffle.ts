@@ -1,10 +1,12 @@
 import { assert } from "chai";
+import { randomBytes } from "crypto";
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
   PublicKey,
+  TransactionInstruction,
   TransactionSignature,
   ConfirmOptions,
 } from "@solana/web3.js";
@@ -178,9 +180,49 @@ describe("raffle", () => {
     // Successful drawWinner call
     await drawWinner(pda);
 
-    // Test WinnerAlreadyDrawn error from drawWinner
+    // Test WinnerAlreadyDrawn error
     await assertAnchorError(() => drawWinner(pda), "WinnerAlreadyDrawn");
 
+    await claimPrize(pda, wallet.payer.publicKey);
+    await closeRaffle(pda, wallet.payer);
+  });
+
+  it("drawWinnerCallback negative tests", async () => {
+    let state = await createRaffle(
+      provider.wallet.payer,
+      solToLamports(0.00001),
+      1,
+      120
+    );
+    let pda = state2Pda(state);
+
+    // end the raffle
+    await buyTickets(pda, provider.wallet.payer, 1);
+
+    await assertAnchorError(
+      () => drawWinnerCallback(pda),
+      "DrawWinnerNotStarted"
+    );
+
+    // To get past the DrawWinnerNotStarted check, we need to call drawWinner
+    // call first, but we don't want a race condition with the VRF. We put
+    // both instructions in a single transaction, so they'll fail together
+    // and the VRF won't be called.
+    let drawWinnerIx = await drawWinnerIX(pda);
+    await assertAnchorError(
+      () => drawWinnerCallback(pda, [drawWinnerIx]),
+      "RequireKeysEqViolated"
+    );
+
+    // Successful drawWinner call and callback if we get past the next line
+    await drawWinner(pda);
+
+    await assertAnchorError(
+      () => drawWinnerCallback(pda),
+      "WinnerAlreadyDrawn"
+    );
+
+    // cleanup
     await claimPrize(pda, wallet.payer.publicKey);
     await closeRaffle(pda, wallet.payer);
   });
@@ -374,6 +416,43 @@ describe("raffle", () => {
     );
 
     return state;
+  }
+
+  async function drawWinnerIX(
+    raffleState: PublicKey
+  ): Promise<TransactionInstruction> {
+    return program.methods
+      .drawWinner()
+      .accounts({
+        oraclePayer: provider.wallet.publicKey,
+        raffleState: raffleState,
+      })
+      .signers([provider.wallet.payer])
+      .instruction();
+  }
+
+  // This function is only for negative testing purposes. drawWinnerCallback can
+  // only be executed by CPI from the VRF program. The address of the
+  // vrf_program_identity is tested last in the Rust code, so all the
+  // constraints are testable.
+  async function drawWinnerCallback(
+    raffleState: PublicKey,
+    prepend_ixs: TransactionInstruction[] = []
+  ): Promise<void> {
+    const invalid_vrf_program_identity = provider.wallet.payer;
+
+    await program.methods
+      .drawWinnerCallback(Array.from(randomBytes(32)))
+      .accounts({
+        vrf_program_identity: invalid_vrf_program_identity.publicKey,
+        raffleState: raffleState,
+      })
+      .signers([invalid_vrf_program_identity])
+      .preInstructions(prepend_ixs)
+
+      .rpc({ commitment: "confirmed" });
+
+    assert.fail("drawWinnerCallback should have failed");
   }
 
   // Listen for the `winnerDrawnEvent` on our specific raffle to

@@ -29,6 +29,10 @@ export async function assertAnchorError(
     await fn();
     assert.fail(`Expected function to fail with ${expectedErrorCode}`);
   } catch (err) {
+    // log the error for debugging if it is not of type AnchorError
+    if (!(err instanceof AnchorError)) {
+      console.error("Caught non-nonAnchor error:", err);
+    }
     assert.instanceOf(err, AnchorError);
     assert.strictEqual(err.error.errorCode.code, expectedErrorCode);
     // Note: if a constraint is violated by annotations on the instruction

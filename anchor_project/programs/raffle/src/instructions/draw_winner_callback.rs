@@ -10,7 +10,10 @@ pub fn draw_winner_callback_impl(
     ctx: Context<DrawWinnerCallback>,
     randomness: [u8; 32],
 ) -> Result<()> {
+    let vrf_program_identity = &ctx.accounts.vrf_program_identity;
     let raffle_state = &mut ctx.accounts.raffle_state;
+
+    require_keys_eq!(vrf_program_identity.key(), VRF_PROGRAM_IDENTITY);
 
     let random_num = ephemeral_vrf_sdk::rnd::random_u64(&randomness) as usize;
     let winner_index = random_num % raffle_state.entrants.len();
@@ -27,8 +30,13 @@ pub fn draw_winner_callback_impl(
 
 #[derive(Accounts)]
 pub struct DrawWinnerCallback<'info> {
-    /// Callback can only be executed by the VRF program through CPI.
-    #[account(address = VRF_PROGRAM_IDENTITY)]
+    /// Callback can only be executed by the VRF program through CPI. Value must be
+    /// 9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw. MagicBlock calls this PDA
+    /// the "program identity", but it is a PDA owned by the VRF program, not the
+    /// VRF program itself.
+    // Not-in-IDL comment: we check the address in the code (executed last) so
+    // the other constraints can be tested.
+    //#[account(address = VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
     /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; mutated to set winner.
     /// Validated first to make the draw_winner_started and winner_index checks testable.
