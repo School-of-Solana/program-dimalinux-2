@@ -18,7 +18,7 @@ pub fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
 
     require!(
         raffle_state.entrants[winner_index].eq(winner.key),
-        RaffleError::Unauthorized
+        RaffleError::NotWinner
     );
     require!(!raffle_state.claimed, RaffleError::PrizeAlreadyClaimed);
 

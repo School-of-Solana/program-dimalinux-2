@@ -13,7 +13,10 @@ pub fn draw_winner_callback_impl(
     let vrf_program_identity = &ctx.accounts.vrf_program_identity;
     let raffle_state = &mut ctx.accounts.raffle_state;
 
-    require_keys_eq!(vrf_program_identity.key(), VRF_PROGRAM_IDENTITY);
+    require!(
+        vrf_program_identity.key().eq(&VRF_PROGRAM_IDENTITY),
+        RaffleError::CallbackNotInvokedByVRF
+    );
 
     let random_num = ephemeral_vrf_sdk::rnd::random_u64(&randomness) as usize;
     let winner_index = random_num % raffle_state.entrants.len();
@@ -49,7 +52,7 @@ pub struct DrawWinnerCallback<'info> {
         ],
         bump,
         constraint = raffle_state.draw_winner_started @ RaffleError::DrawWinnerNotStarted,
-        constraint = raffle_state.winner_index.is_none() @ RaffleError::WinnerAlreadyDrawn
+        constraint = raffle_state.winner_index.is_none() @ RaffleError::CallbackAlreadyInvoked
     )]
     pub raffle_state: Account<'info, RaffleState>,
 }

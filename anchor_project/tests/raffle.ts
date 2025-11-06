@@ -211,7 +211,7 @@ describe("raffle", () => {
     let drawWinnerIx = await drawWinnerIX(pda);
     await assertAnchorError(
       () => drawWinnerCallback(pda, [drawWinnerIx]),
-      "RequireKeysEqViolated"
+      "CallbackNotInvokedByVRF"
     );
 
     // Successful drawWinner call and callback if we get past the next line
@@ -219,7 +219,7 @@ describe("raffle", () => {
 
     await assertAnchorError(
       () => drawWinnerCallback(pda),
-      "WinnerAlreadyDrawn"
+      "CallbackAlreadyInvoked"
     );
 
     // cleanup
@@ -253,7 +253,7 @@ describe("raffle", () => {
 
     await assertAnchorError(
       () => claimPrize(pda, mallory.publicKey),
-      "Unauthorized"
+      "NotWinner"
     );
 
     await claimPrize(pda, alice.publicKey);
@@ -444,7 +444,7 @@ describe("raffle", () => {
     await program.methods
       .drawWinnerCallback(Array.from(randomBytes(32)))
       .accounts({
-        vrf_program_identity: invalid_vrf_program_identity.publicKey,
+        vrfProgramIdentity: invalid_vrf_program_identity.publicKey,
         raffleState: raffleState,
       })
       .signers([invalid_vrf_program_identity])

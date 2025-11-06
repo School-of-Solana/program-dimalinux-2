@@ -18,11 +18,12 @@ pub enum RaffleError {
 
     // draw_winner_callback errors
     DrawWinnerNotStarted,
-    // WinnerAlreadyDrawn (reused)
+    CallbackAlreadyInvoked,
+    CallbackNotInvokedByVRF,
 
     // claim_prize errors
     WinnerNotYetDrawn,
-    Unauthorized,
+    NotWinner,
     PrizeAlreadyClaimed,
 
     // close_raffle errors
