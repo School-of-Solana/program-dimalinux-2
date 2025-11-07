@@ -21,7 +21,7 @@ import { assert } from "chai";
  * @param expectedOrigin Optional expected origin field for constraint errors
  */
 export async function assertAnchorError(
-  fn: () => Promise<any>,
+  fn: () => Promise<unknown>,
   expectedErrorCode: string,
   expectedOrigin?: string
 ): Promise<void> {
@@ -55,7 +55,7 @@ export async function printLogs(
   instructionName: string,
   connection: Connection,
   txSignature: TransactionSignature
-) {
+): Promise<void> {
   const txDetails = await connection.getTransaction(txSignature, {
     maxSupportedTransactionVersion: 0,
     commitment: "confirmed",
@@ -92,14 +92,14 @@ export async function createFundedWallet(
   const newWallet = Keypair.generate();
   const amountInLamports = solToLamports(amountInSOL).toNumber();
 
-  let balance = await connection.getBalance(fundingWallet.publicKey);
+  const balance = await connection.getBalance(fundingWallet.publicKey);
   if (balance < amountInLamports) {
     throw new Error(
       `Default anchor wallet has insufficient funds ${balance} < ${amountInLamports}`
     );
   }
 
-  let sig: TransactionSignature = await provider.sendAndConfirm(
+  const sig: TransactionSignature = await provider.sendAndConfirm(
     new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: fundingWallet.publicKey,
@@ -118,10 +118,7 @@ export async function createFundedWallet(
  * @param provider The AnchorProvider instance.
  * @param tmpWallet The temporary wallet Keypair to recover funds from.
  */
-export async function recoverFunds(
-  provider: AnchorProvider,
-  tmpWallet: Keypair
-): Promise<void> {
+export async function recoverFunds(provider: AnchorProvider, tmpWallet: Keypair): Promise<void> {
   const connection = provider.connection;
   const destination = provider.wallet.publicKey;
 
@@ -129,9 +126,7 @@ export async function recoverFunds(
   if (sig) {
     await printLogs("sweepSol", connection, sig);
   } else {
-    console.error(
-      `No sweep transaction created for ${tmpWallet.publicKey.toBase58()}`
-    );
+    console.error(`No sweep transaction created for ${tmpWallet.publicKey.toBase58()}`);
   }
 }
 
@@ -152,15 +147,10 @@ export async function sweepSol(
 ): Promise<TransactionSignature | null> {
   const tempWalletPublicKey = fromWallet.publicKey;
 
-  const balanceInLamports = await connection.getBalance(
-    tempWalletPublicKey,
-    commitment
-  );
+  const balanceInLamports = await connection.getBalance(tempWalletPublicKey, commitment);
 
   if (balanceInLamports === 0) {
-    console.log(
-      `Wallet ${tempWalletPublicKey.toBase58()} has zero SOL. Nothing to sweep.`
-    );
+    console.log(`Wallet ${tempWalletPublicKey.toBase58()} has zero SOL. Nothing to sweep.`);
     return null;
   }
 
@@ -183,9 +173,7 @@ export async function sweepSol(
   const feeResult = await connection.getFeeForMessage(message, "processed");
 
   if (feeResult.value === null) {
-    throw new Error(
-      "Failed to get fee estimate. Blockhash might be too old or invalid."
-    );
+    throw new Error("Failed to get fee estimate. Blockhash might be too old or invalid.");
   }
 
   const requiredFee = feeResult.value;
@@ -203,11 +191,7 @@ export async function sweepSol(
   }
 
   console.log(`Total Balance: ${balanceInLamports} lamports`);
-  console.log(
-    `Sweep Amount: ${maxSweepAmount} lamports (${lamportsToSol(
-      maxSweepAmount
-    )} SOL)`
-  );
+  console.log(`Sweep Amount: ${maxSweepAmount} lamports (${lamportsToSol(maxSweepAmount)} SOL)`);
   console.log(`Destination: ${toWallet.toBase58()}`);
 
   // Create the final transaction now that we know the maximum sweep amount
@@ -234,7 +218,7 @@ export async function sweepSol(
   console.log(
     `Swept ${lamportsToSol(maxSweepAmount)} SOL (fee ${lamportsToSol(
       requiredFee
-    )} SOL) from ${fromWallet.publicKey} to ${toWallet}`
+    )} SOL) from ${fromWallet.publicKey.toBase58()} to ${toWallet.toBase58()}`
   );
 
   return sig;

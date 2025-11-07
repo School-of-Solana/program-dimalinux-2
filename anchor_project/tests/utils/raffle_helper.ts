@@ -29,8 +29,8 @@ interface WinnerDrawnEvent {
 }
 
 /**
- * Helper class for testing raffle program operations.
- * Encapsulates common operations like creating raffles, buying tickets, etc.
+ * Helper class for testing raffle program operations. Encapsulates operations,
+ * adds expected state-change asserts, and prints on-chain program logs.
  */
 export class RaffleTestHelper {
   readonly program: Program<Raffle>;
@@ -41,38 +41,6 @@ export class RaffleTestHelper {
     this.program = program;
     this.connection = program.provider.connection;
     this.eventParser = new EventParser(program.programId, program.coder);
-  }
-
-  /**
-   * Derives the PDA for a raffle state account.
-   */
-  pda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync(
-      [
-        anchor.utils.bytes.utf8.encode("RaffleSeed"),
-        raffleOwner.toBuffer(),
-        endTime.toArrayLike(Buffer, "le", 8),
-      ],
-      this.program.programId
-    );
-  }
-
-  /**
-   * Converts a RaffleState to its PDA address.
-   */
-  state2Pda(state: RaffleState): PublicKey {
-    const [pda, _bump] = this.pda(state.raffleManager, state.endTime);
-    return pda;
-  }
-
-  /**
-   * Fetches the current state of a raffle account.
-   */
-  async getState(pda: PublicKey): Promise<RaffleState> {
-    return (await this.program.account.raffleState.fetch(
-      pda,
-      "confirmed"
-    )) as RaffleState;
   }
 
   /**
@@ -94,7 +62,7 @@ export class RaffleTestHelper {
     const [pda, bump] = this.pda(raffleOwner.publicKey, endTime);
     console.error(`Raffle PDA: ${pda.toBase58()}, bump: ${bump}`);
 
-    let sig: TransactionSignature = await this.program.methods
+    const sig: TransactionSignature = await this.program.methods
       .createRaffle(ticketPrice, maxTickets, endTime)
       .accounts({
         raffleOwner: raffleOwner.publicKey,
@@ -125,12 +93,8 @@ export class RaffleTestHelper {
    * @param numTickets Number of tickets to buy.
    * @returns The updated raffle state.
    */
-  async buyTickets(
-    raffleState: PublicKey,
-    buyer: Keypair,
-    numTickets = 1
-  ): Promise<RaffleState> {
-    let sig = await this.program.methods
+  async buyTickets(raffleState: PublicKey, buyer: Keypair, numTickets = 1): Promise<RaffleState> {
+    const sig = await this.program.methods
       .buyTickets(numTickets)
       .accounts({
         buyer: buyer.publicKey,
@@ -141,10 +105,10 @@ export class RaffleTestHelper {
 
     await printLogs("buyTickets", this.connection, sig);
 
-    let state = await this.getState(raffleState);
+    const state = await this.getState(raffleState);
     assert.isAtLeast(state.entrants.length, numTickets);
-    let start = state.entrants.length - numTickets;
-    let end = state.entrants.length;
+    const start = state.entrants.length - numTickets;
+    const end = state.entrants.length;
     for (let i = start; i < end; i++) {
       assert.isTrue(state.entrants[i].equals(buyer.publicKey));
     }
@@ -184,12 +148,10 @@ export class RaffleTestHelper {
       console.warn(e);
     }
 
-    let state = await this.getState(raffleState);
+    const state = await this.getState(raffleState);
     assert.isTrue(state.drawWinnerStarted);
     assert.isNotNull(state.winnerIndex);
-    assert.isTrue(
-      state.winnerIndex! >= 0 && state.winnerIndex! < state.entrants.length
-    );
+    assert.isTrue(state.winnerIndex >= 0 && state.winnerIndex < state.entrants.length);
 
     return state;
   }
@@ -241,9 +203,7 @@ export class RaffleTestHelper {
    * @param raffleState The PDA of the raffle state account.
    * @returns Promise that resolves with the callback transaction signature.
    */
-  private async waitForDrawWinnerCallback(
-    raffleState: PublicKey
-  ): Promise<TransactionSignature> {
+  private async waitForDrawWinnerCallback(raffleState: PublicKey): Promise<TransactionSignature> {
     const timeoutMs = 8000;
     let listenerId: number | null = null;
 
@@ -256,7 +216,7 @@ export class RaffleTestHelper {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        cancelListener(this.connection);
+        void cancelListener(this.connection);
         reject(new Error("Timeout waiting for winnerDrawnEvent"));
       }, timeoutMs);
 
@@ -267,19 +227,19 @@ export class RaffleTestHelper {
       listenerId = this.connection.onLogs(
         this.program.programId,
         (logsResult) => {
-          if (logsResult.err) return;
+          if (logsResult.err) {
+            return;
+          }
           const events = this.eventParser.parseLogs(logsResult.logs, false);
           for (const event of events) {
             if (event.name === "winnerDrawnEvent") {
               const e = event.data as WinnerDrawnEvent;
-              if (!raffleState.equals(e.raffleState)) continue;
+              if (!raffleState.equals(e.raffleState)) {
+                continue;
+              }
               clearTimeout(timeout);
-              cancelListener(this.connection);
-              console.log(
-                `winnerDrawnEvent: index=${
-                  e.winnerIndex
-                } winner=${e.winner.toBase58()}`
-              );
+              void cancelListener(this.connection);
+              console.log(`winnerDrawnEvent: index=${e.winnerIndex} winner=${e.winner.toBase58()}`);
               return resolve(logsResult.signature);
             }
           }
@@ -295,10 +255,7 @@ export class RaffleTestHelper {
    * @param winner The public key of the winner.
    * @returns The updated raffle state.
    */
-  async claimPrize(
-    raffleState: PublicKey,
-    winner: PublicKey
-  ): Promise<RaffleState> {
+  async claimPrize(raffleState: PublicKey, winner: PublicKey): Promise<RaffleState> {
     console.error("claimPrize starting");
 
     const sig: TransactionSignature = await this.program.methods
@@ -311,10 +268,10 @@ export class RaffleTestHelper {
 
     await printLogs("claimPrize", this.connection, sig);
 
-    let state = await this.getState(raffleState);
+    const state = await this.getState(raffleState);
     assert.isTrue(state.claimed);
     assert.isNotNull(state.winnerIndex);
-    assert.isTrue(winner.equals(state.entrants[state.winnerIndex!]));
+    assert.isTrue(winner.equals(state.entrants[state.winnerIndex]));
 
     return state;
   }
@@ -337,5 +294,34 @@ export class RaffleTestHelper {
       .rpc({ commitment: "confirmed" });
 
     await printLogs("closeRaffle", this.connection, sig);
+  }
+
+  /**
+   * Derives the PDA for a raffle state account.
+   */
+  pda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [
+        anchor.utils.bytes.utf8.encode("RaffleSeed"),
+        raffleOwner.toBuffer(),
+        endTime.toArrayLike(Buffer, "le", 8),
+      ],
+      this.program.programId
+    );
+  }
+
+  /**
+   * Converts a RaffleState to its PDA address.
+   */
+  state2Pda(state: RaffleState): PublicKey {
+    const [pda, _bump] = this.pda(state.raffleManager, state.endTime);
+    return pda;
+  }
+
+  /**
+   * Fetches the current state of a raffle account.
+   */
+  async getState(pda: PublicKey): Promise<RaffleState> {
+    return (await this.program.account.raffleState.fetch(pda, "confirmed")) as RaffleState;
   }
 }

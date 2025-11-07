@@ -1,10 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
-import {
-  Connection,
-  PublicKey,
-  ConfirmOptions,
-} from "@solana/web3.js";
+import { Connection, PublicKey, ConfirmOptions } from "@solana/web3.js";
 import {
   createFundedWallet,
   recoverFunds,
@@ -12,10 +8,7 @@ import {
   assertAnchorError,
 } from "./utils/test_utils";
 import { Raffle } from "../target/types/raffle";
-import {
-  RaffleTestHelper,
-  RaffleState,
-} from "./utils/raffle_helper";
+import { RaffleTestHelper, RaffleState } from "./utils/raffle_helper";
 const PROVIDER_URL: string = "https://api.devnet.solana.com";
 
 const opts: ConfirmOptions = {
@@ -29,6 +22,7 @@ describe("raffle", () => {
   const connection = new Connection(PROVIDER_URL);
   const provider = new AnchorProvider(connection, wallet, opts);
   anchor.setProvider(provider);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   const program = anchor.workspace.raffle as Program<Raffle>;
 
   const raffle = new RaffleTestHelper(program);
@@ -36,14 +30,9 @@ describe("raffle", () => {
   it("Full Raffle Success", async () => {
     const raffleManager = await createFundedWallet(provider, 0.5);
     const ticketPrice = solToLamports(0.00001);
-    let state: RaffleState = await raffle.create(
-      raffleManager,
-      ticketPrice,
-      1,
-      120
-    );
+    const state: RaffleState = await raffle.create(raffleManager, ticketPrice, 1, 120);
 
-    let pda = raffle.state2Pda(state);
+    const pda = raffle.state2Pda(state);
 
     await raffle.buyTickets(pda, wallet.payer, 1);
     await raffle.drawWinner(pda);
@@ -88,13 +77,8 @@ describe("raffle", () => {
   });
 
   it("buyTickets negative tests", async () => {
-    let state = await raffle.create(
-      provider.wallet.payer,
-      solToLamports(0.00001),
-      1,
-      120
-    );
-    let pda = raffle.state2Pda(state);
+    const state = await raffle.create(provider.wallet.payer, solToLamports(0.00001), 1, 120);
+    const pda = raffle.state2Pda(state);
 
     // Buy 2 tickets when only 1 is available
     await assertAnchorError(
@@ -117,13 +101,8 @@ describe("raffle", () => {
   });
 
   it("drawWinner negative tests", async () => {
-    let state = await raffle.create(
-      provider.wallet.payer,
-      solToLamports(0.00001),
-      2,
-      120
-    );
-    let pda = raffle.state2Pda(state);
+    const state = await raffle.create(provider.wallet.payer, solToLamports(0.00001), 2, 120);
+    const pda = raffle.state2Pda(state);
 
     // Test NoEntrants error
     await assertAnchorError(() => raffle.drawWinner(pda), "NoEntrants");
@@ -164,27 +143,19 @@ describe("raffle", () => {
   });
 
   it("drawWinnerCallback negative tests", async () => {
-    let state = await raffle.create(
-      provider.wallet.payer,
-      solToLamports(0.00001),
-      1,
-      120
-    );
-    let pda = raffle.state2Pda(state);
+    const state = await raffle.create(provider.wallet.payer, solToLamports(0.00001), 1, 120);
+    const pda = raffle.state2Pda(state);
 
     // end the raffle
     await raffle.buyTickets(pda, provider.wallet.payer, 1);
 
-    await assertAnchorError(
-      () => raffle.drawWinnerCallback(pda),
-      "DrawWinnerNotStarted"
-    );
+    await assertAnchorError(() => raffle.drawWinnerCallback(pda), "DrawWinnerNotStarted");
 
     // To get past the DrawWinnerNotStarted check, we need to call drawWinner
     // call first, but we don't want a race condition with the VRF. We put
     // both instructions in a single transaction, so they'll fail together
     // and the VRF won't be called.
-    let drawWinnerIx = await raffle.drawWinnerIX(pda);
+    const drawWinnerIx = await raffle.drawWinnerIX(pda);
     await assertAnchorError(
       () => raffle.drawWinnerCallback(pda, [drawWinnerIx]),
       "CallbackNotInvokedByVRF"
@@ -193,10 +164,7 @@ describe("raffle", () => {
     // Successful drawWinner call and callback if we get past the next line
     await raffle.drawWinner(pda);
 
-    await assertAnchorError(
-      () => raffle.drawWinnerCallback(pda),
-      "CallbackAlreadyInvoked"
-    );
+    await assertAnchorError(() => raffle.drawWinnerCallback(pda), "CallbackAlreadyInvoked");
 
     // cleanup
     await raffle.claimPrize(pda, wallet.payer.publicKey);
@@ -208,29 +176,18 @@ describe("raffle", () => {
     const mallory = await createFundedWallet(provider, 0.1);
     const ticketPrice = solToLamports(0.00001);
 
-    let state: RaffleState = await raffle.create(
-      provider.wallet.payer,
-      ticketPrice,
-      3,
-      120
-    );
+    const state: RaffleState = await raffle.create(provider.wallet.payer, ticketPrice, 3, 120);
 
-    let pda = raffle.state2Pda(state);
+    const pda = raffle.state2Pda(state);
 
     // Alice buys all 3 tickets
     await raffle.buyTickets(pda, alice, 3);
 
-    await assertAnchorError(
-      () => raffle.claimPrize(pda, alice.publicKey),
-      "WinnerNotYetDrawn"
-    );
+    await assertAnchorError(() => raffle.claimPrize(pda, alice.publicKey), "WinnerNotYetDrawn");
 
     await raffle.drawWinner(pda);
 
-    await assertAnchorError(
-      () => raffle.claimPrize(pda, mallory.publicKey),
-      "NotWinner"
-    );
+    await assertAnchorError(() => raffle.claimPrize(pda, mallory.publicKey), "NotWinner");
 
     await raffle.claimPrize(pda, alice.publicKey);
     await raffle.close(pda, provider.wallet.payer);
@@ -242,26 +199,15 @@ describe("raffle", () => {
     const manager = await createFundedWallet(provider, 0.1);
     const notManager = await createFundedWallet(provider, 0.1);
 
-    let state: RaffleState = await raffle.create(
-      manager,
-      solToLamports(0.00001),
-      2,
-      120
-    );
+    const state: RaffleState = await raffle.create(manager, solToLamports(0.00001), 2, 120);
 
-    let pda = raffle.state2Pda(state);
+    const pda = raffle.state2Pda(state);
 
-    await assertAnchorError(
-      () => raffle.close(pda, notManager),
-      "OnlyRaffleManagerCanClose"
-    );
+    await assertAnchorError(() => raffle.close(pda, notManager), "OnlyRaffleManagerCanClose");
 
     await raffle.buyTickets(pda, notManager, 1);
 
-    await assertAnchorError(
-      () => raffle.close(pda, manager),
-      "CanNotCloseActiveRaffle"
-    );
+    await assertAnchorError(() => raffle.close(pda, manager), "CanNotCloseActiveRaffle");
 
     // buy the last ticket to end the raffle
     await raffle.buyTickets(pda, notManager, 1);
