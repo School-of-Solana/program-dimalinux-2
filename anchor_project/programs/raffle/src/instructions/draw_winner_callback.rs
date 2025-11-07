@@ -6,13 +6,15 @@ use crate::{
     state::{RaffleState, RAFFLE_SEED},
 };
 
-pub fn draw_winner_callback_impl(
+pub(crate) fn draw_winner_callback_impl(
     ctx: Context<DrawWinnerCallback>,
     randomness: [u8; 32],
 ) -> Result<()> {
     let vrf_program_identity = &ctx.accounts.vrf_program_identity;
     let raffle_state = &mut ctx.accounts.raffle_state;
 
+    // We have to validate this constraint in code to make the other
+    // constraints to be triggered first and testable.
     require!(
         vrf_program_identity.key().eq(&VRF_PROGRAM_IDENTITY),
         RaffleError::CallbackNotInvokedByVRF

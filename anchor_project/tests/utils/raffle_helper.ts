@@ -214,8 +214,10 @@ export class RaffleTestHelper {
   ): Promise<[WinnerDrawnEvent, TransactionSignature]> {
     const timeoutMs = 8000;
     let listenerId: number | null = null;
+    let cancelled = false;
 
     async function cancelListener(connection: Connection): Promise<void> {
+      cancelled = true;
       if (listenerId !== null) {
         await connection.removeOnLogsListener(listenerId);
         listenerId = null;
@@ -235,7 +237,7 @@ export class RaffleTestHelper {
       listenerId = this.connection.onLogs(
         this.program.programId,
         (logsResult) => {
-          if (logsResult.err) {
+          if (cancelled || logsResult.err) {
             return;
           }
           const events = this.eventParser.parseLogs(logsResult.logs, false);

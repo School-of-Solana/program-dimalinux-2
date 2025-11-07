@@ -8,15 +8,12 @@ use crate::{
     state::{RaffleState, RAFFLE_SEED},
 };
 
-pub fn create_raffle_impl(
+pub(crate) fn create_raffle_impl(
     ctx: Context<CreateRaffle>,
     ticket_price: u64,
     max_tickets: u32,
     end_time: UnixTimestamp,
 ) -> Result<()> {
-    let now = Clock::get()?.unix_timestamp;
-    require!(end_time > now, RaffleError::RaffleEndTimeInPast);
-    require!(max_tickets > 0, RaffleError::MaxTicketsIsZero);
     let raffle_owner = &ctx.accounts.raffle_owner;
     let raffle_state = &mut ctx.accounts.raffle_state;
     msg!("New state account: {}", raffle_state.key());
@@ -39,7 +36,7 @@ pub fn create_raffle_impl(
 #[derive(Accounts)]
 #[instruction(ticket_price: u64, max_tickets: u32, end_time: i64)]
 pub struct CreateRaffle<'info> {
-    /// Raffle manager and payer for account initialization.
+    /// Raffle manager and payer for raffle_state account creation
     #[account(mut)]
     pub raffle_owner: Signer<'info>,
     /// Raffle state PDA initialized with seeds [RAFFLE_SEED, raffle_owner, end_time].
@@ -53,9 +50,15 @@ pub struct CreateRaffle<'info> {
             raffle_owner.key().as_ref(),
             end_time.to_le_bytes().as_ref(),
         ],
-        bump
+        bump,
+        constraint = end_time > clock.unix_timestamp
+            @ RaffleError::RaffleEndTimeInPast,
+        constraint = max_tickets > 0
+            @ RaffleError::MaxTicketsIsZero
     )]
     pub raffle_state: Account<'info, RaffleState>,
-    /// System program.
+    /// System program needed to create the raffle state account.
     pub system_program: Program<'info, System>,
+    /// Clock sysvar for timestamp validation
+    pub clock: Sysvar<'info, Clock>,
 }

@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::clock::Clock};
+use anchor_lang::prelude::*;
 use ephemeral_vrf_sdk::{
     anchor::vrf,
     instructions::{create_request_randomness_ix, RequestRandomnessParams},
@@ -15,29 +15,13 @@ use crate::{
 const DRAW_WINNER_CALLBACK_DISCRIMINATOR: &[u8] =
     crate::instruction::DrawWinnerCallback::DISCRIMINATOR;
 
-pub fn draw_winner_impl(ctx: Context<DrawWinner>) -> Result<()> {
+pub(crate) fn draw_winner_impl(ctx: Context<DrawWinner>) -> Result<()> {
     let oracle_payer = &ctx.accounts.oracle_payer;
     let oracle_queue = &ctx.accounts.oracle_queue;
     let raffle_state = &mut ctx.accounts.raffle_state;
 
-    require!(
-        raffle_state.winner_index.is_none(),
-        RaffleError::WinnerAlreadyDrawn
-    );
-
-    // The raffle manager can close the raffle and reclaim rent if there are no
-    // entrants, so there is no need to draw a winner.
-    require!(raffle_state.entrants.len() > 0, RaffleError::NoEntrants);
-
-    let clock: Clock = Clock::get()?;
-    require!(
-        raffle_state.is_raffle_over(&clock),
-        RaffleError::RaffleNotOver
-    );
-
     raffle_state.draw_winner_started = true;
 
-    msg!("Requesting randomness...");
     let ix = create_request_randomness_ix(RequestRandomnessParams {
         payer: oracle_payer.key(),
         oracle_queue: oracle_queue.key(),
@@ -52,10 +36,9 @@ pub fn draw_winner_impl(ctx: Context<DrawWinner>) -> Result<()> {
         }]),
         ..Default::default()
     });
-    msg!("instruction request complete");
+
     ctx.accounts
         .invoke_signed_vrf(&oracle_payer.to_account_info(), &ix)?;
-    msg!("invoke_signed_vrf complete");
 
     Ok(())
 }
@@ -74,10 +57,22 @@ pub struct DrawWinner<'info> {
             raffle_state.raffle_manager.key().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
-        bump
+        bump,
+        // Ensure winner hasn't been drawn yet
+        constraint = raffle_state.winner_index.is_none()
+            @ RaffleError::WinnerAlreadyDrawn,
+        // Require at least one entrant (raffle manager can close if empty)
+        constraint = !raffle_state.entrants.is_empty()
+            @ RaffleError::NoEntrants,
+        // Check if raffle has ended (either max tickets sold or time elapsed)
+        constraint = raffle_state.entrants.len() >= raffle_state.max_tickets as usize
+            || clock.unix_timestamp >= raffle_state.end_time
+            @ RaffleError::RaffleNotOver
     )]
     pub raffle_state: Account<'info, RaffleState>,
     /// CHECK: The oracle queue to use (address constrained to DEFAULT_QUEUE).
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
+    /// Clock sysvar for timestamp validation
+    pub clock: Sysvar<'info, Clock>,
 }

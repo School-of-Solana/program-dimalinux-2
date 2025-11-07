@@ -5,22 +5,9 @@ use crate::{
     state::{RaffleState, RAFFLE_SEED},
 };
 
-pub fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
+pub(crate) fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
     let raffle_state = &mut ctx.accounts.raffle_state;
     let winner = &mut ctx.accounts.winner;
-
-    // Check if winner exists and randomness fulfilled
-    require!(
-        raffle_state.winner_index.is_some(),
-        RaffleError::WinnerNotYetDrawn
-    );
-    let winner_index = raffle_state.winner_index.unwrap() as usize;
-
-    require!(
-        raffle_state.entrants[winner_index].eq(winner.key),
-        RaffleError::NotWinner
-    );
-    require!(!raffle_state.claimed, RaffleError::PrizeAlreadyClaimed);
 
     let prize_amount = raffle_state.ticket_price * raffle_state.entrants.len() as u64;
 
@@ -36,7 +23,7 @@ pub struct ClaimPrize<'info> {
     /// Winner receives prize lamports. Anyone can trigger the claim on behalf
     /// of the winner.
     /// CHECK: Winner is validated against raffle_state.entrants[winner_index]
-    /// in the instruction logic.
+    /// via the constraint on raffle_state.
     #[account(mut)]
     pub winner: UncheckedAccount<'info>,
     /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; pays prize to winner and flips `claimed`.
@@ -47,7 +34,14 @@ pub struct ClaimPrize<'info> {
             raffle_state.raffle_manager.key().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
-        bump
+        bump,
+        constraint = raffle_state.winner_index.is_some()
+            @ RaffleError::WinnerNotYetDrawn,
+        constraint = raffle_state.entrants[raffle_state.winner_index.unwrap() as usize]
+            .eq(winner.key)
+            @ RaffleError::NotWinner,
+        constraint = !raffle_state.claimed
+            @ RaffleError::PrizeAlreadyClaimed
     )]
     pub raffle_state: Account<'info, RaffleState>,
 }

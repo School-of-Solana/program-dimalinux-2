@@ -40,10 +40,6 @@ impl RaffleState {
             4 +   // length of entrants vec
             (32 * max_tickets as usize) // entrants
     }
-
-    pub fn is_raffle_over(&self, now: &Clock) -> bool {
-        self.entrants.len() >= self.max_tickets as usize || now.unix_timestamp >= self.end_time
-    }
 }
 
 #[cfg(test)]

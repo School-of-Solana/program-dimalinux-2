@@ -2,7 +2,7 @@ use core::iter;
 
 use anchor_lang::{
     prelude::*,
-    solana_program::{clock::Clock, program::invoke, system_instruction::transfer},
+    solana_program::{program::invoke, system_instruction::transfer},
 };
 
 use crate::{
@@ -10,26 +10,9 @@ use crate::{
     state::{RaffleState, RAFFLE_SEED},
 };
 
-pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
+pub(crate) fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Result<()> {
     let raffle_state = &mut ctx.accounts.raffle_state;
     let buyer = &ctx.accounts.buyer;
-    let clock = Clock::get()?;
-    require!(
-        !raffle_state.is_raffle_over(&clock),
-        RaffleError::RaffleHasEnded
-    );
-
-    // Check if there are enough tickets available
-    // (overflow impossible: entrants.len() bounded by max_tickets which is u32)
-    let new_total = raffle_state
-        .entrants
-        .len()
-        .checked_add(number_of_tickets as usize)
-        .unwrap();
-    require!(
-        new_total <= raffle_state.max_tickets as usize,
-        RaffleError::InsufficientTickets
-    );
 
     // Compute total price (overflow prevented by create_raffle checks)
     let total_price = raffle_state
@@ -56,6 +39,7 @@ pub fn buy_tickets_impl(ctx: Context<BuyTickets>, number_of_tickets: u32) -> Res
 }
 
 #[derive(Accounts)]
+#[instruction(number_of_tickets: u32)]
 pub struct BuyTickets<'info> {
     /// Buyer paying for tickets; must sign.
     #[account(mut)]
@@ -68,9 +52,20 @@ pub struct BuyTickets<'info> {
             raffle_state.raffle_manager.key().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
-        bump
+        bump,
+        // Ensure raffle hasn't ended yet
+        constraint = raffle_state.entrants.len() < raffle_state.max_tickets as usize
+            && clock.unix_timestamp < raffle_state.end_time
+            @ RaffleError::RaffleHasEnded,
+        // Check if there are enough tickets available
+        // (overflow impossible: entrants.len() bounded by max_tickets which is u32)
+        constraint = raffle_state.entrants.len() + number_of_tickets as usize
+            <= raffle_state.max_tickets as usize
+            @ RaffleError::InsufficientTickets
     )]
     pub raffle_state: Account<'info, RaffleState>,
     /// System program (transfer lamports).
     pub system_program: Program<'info, System>,
+    /// Clock sysvar for timestamp validation
+    pub clock: Sysvar<'info, Clock>,
 }
