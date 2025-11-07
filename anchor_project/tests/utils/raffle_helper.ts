@@ -8,7 +8,7 @@ import {
   TransactionSignature,
 } from "@solana/web3.js";
 import { Raffle } from "../../target/types/raffle";
-import { printLogs } from "./test_utils";
+import { printLogs, vrf_random_u64 } from "./test_utils";
 import { assert } from "chai";
 
 export interface RaffleState {
@@ -24,8 +24,8 @@ export interface RaffleState {
 
 interface WinnerDrawnEvent {
   raffleState: PublicKey;
-  winnerIndex: number;
   winner: PublicKey;
+  randomness: number[]; // Randomness from VRF (32 bytes)
 }
 
 /**
@@ -60,7 +60,7 @@ export class RaffleTestHelper {
     const now = Math.floor(Date.now() / 1000);
     const endTime = new BN(now + deltaToEndSecs);
     const [pda, bump] = this.pda(raffleOwner.publicKey, endTime);
-    console.error(`Raffle PDA: ${pda.toBase58()}, bump: ${bump}`);
+    console.log(`Raffle PDA: ${pda.toBase58()}, bump: ${bump}`);
 
     const sig: TransactionSignature = await this.program.methods
       .createRaffle(ticketPrice, maxTickets, endTime)
@@ -139,8 +139,10 @@ export class RaffleTestHelper {
 
     await printLogs("drawWinner", this.connection, sig);
 
+    let event: WinnerDrawnEvent | null = null;
     try {
-      const callbackSig = await callbackPromise;
+      let callbackSig: TransactionSignature;
+      [event, callbackSig] = await callbackPromise;
       await printLogs("drawWinnerCallback", this.connection, callbackSig);
     } catch (e) {
       // If a timeout happens, we may have just missed the winnerDrawnEvent, so
@@ -152,6 +154,10 @@ export class RaffleTestHelper {
     assert.isTrue(state.drawWinnerStarted);
     assert.isNotNull(state.winnerIndex);
     assert.isTrue(state.winnerIndex >= 0 && state.winnerIndex < state.entrants.length);
+    if (event) {
+      const calcIndex = vrf_random_u64(event.randomness).modn(state.entrants.length);
+      assert.strictEqual(calcIndex, state.winnerIndex);
+    }
 
     return state;
   }
@@ -203,7 +209,9 @@ export class RaffleTestHelper {
    * @param raffleState The PDA of the raffle state account.
    * @returns Promise that resolves with the callback transaction signature.
    */
-  private async waitForDrawWinnerCallback(raffleState: PublicKey): Promise<TransactionSignature> {
+  private async waitForDrawWinnerCallback(
+    raffleState: PublicKey
+  ): Promise<[WinnerDrawnEvent, TransactionSignature]> {
     const timeoutMs = 8000;
     let listenerId: number | null = null;
 
@@ -239,8 +247,14 @@ export class RaffleTestHelper {
               }
               clearTimeout(timeout);
               void cancelListener(this.connection);
-              console.log(`winnerDrawnEvent: index=${e.winnerIndex} winner=${e.winner.toBase58()}`);
-              return resolve(logsResult.signature);
+              console.log(
+                `winnerDrawnEvent:\n  tx: ${
+                  logsResult.signature
+                }\n  pda: ${e.raffleState.toBase58()}\n  winner: ${e.winner.toBase58()}\n  randomness: 0x${Buffer.from(
+                  e.randomness
+                ).toString("hex")}`
+              );
+              return resolve([e, logsResult.signature]);
             }
           }
         },
@@ -256,7 +270,7 @@ export class RaffleTestHelper {
    * @returns The updated raffle state.
    */
   async claimPrize(raffleState: PublicKey, winner: PublicKey): Promise<RaffleState> {
-    console.error("claimPrize starting");
+    console.log("claimPrize starting");
 
     const sig: TransactionSignature = await this.program.methods
       .claimPrize()
@@ -282,7 +296,7 @@ export class RaffleTestHelper {
    * @param raffleManager The keypair of the raffle manager.
    */
   async close(raffleState: PublicKey, raffleManager: Keypair): Promise<void> {
-    console.error("closeRaffle starting");
+    console.log("closeRaffle starting");
 
     const sig: TransactionSignature = await this.program.methods
       .closeRaffle()

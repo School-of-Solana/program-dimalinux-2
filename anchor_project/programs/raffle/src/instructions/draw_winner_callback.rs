@@ -24,8 +24,8 @@ pub fn draw_winner_callback_impl(
 
     emit!(WinnerDrawnEvent {
         raffle_state: raffle_state.key(),
-        winner_index: winner_index as u32,
         winner: raffle_state.entrants[winner_index],
+        randomness
     });
 
     Ok(())
@@ -67,8 +67,8 @@ pub struct DrawWinnerCallback<'info> {
 pub struct WinnerDrawnEvent {
     /// Raffle state PDA for which the winner was drawn.
     pub raffle_state: Pubkey,
-    /// Index into `entrants` corresponding to the winner.
-    pub winner_index: u32,
     /// Winner's public key.
     pub winner: Pubkey,
+    /// Randomness from VRF used to draw the winner.
+    randomness: [u8; 32],
 }

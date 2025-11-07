@@ -29,10 +29,6 @@ export async function assertAnchorError(
     await fn();
     assert.fail(`Expected function to fail with ${expectedErrorCode}`);
   } catch (err) {
-    // log the error for debugging if it is not of type AnchorError
-    if (!(err instanceof AnchorError)) {
-      console.error("Caught non-nonAnchor error:", err);
-    }
     assert.instanceOf(err, AnchorError);
     assert.strictEqual(err.error.errorCode.code, expectedErrorCode);
     // Note: if a constraint is violated by annotations on the instruction
@@ -240,4 +236,31 @@ export function solToLamports(sol: number): BN {
  */
 export function lamportsToSol(lamports: number): number {
   return lamports / LAMPORTS_PER_SOL;
+}
+
+/**
+ * Generates a random u64 value from a 32-byte random seed using the same
+ * algorithm as the Rust ephemeral_vrf_sdk::rnd::random_u64 function.
+ *
+ * The function extracts bytes at indices [0, 4, 8, 12, 16, 20, 24, 28]
+ * and interprets them as a little-endian u64.
+ *
+ * @param randomness - A 32-byte array containing random data from the VRF
+ * @returns A BN representing the random u64 value
+ */
+export function vrf_random_u64(randomness: number[]): BN {
+  // Extract bytes at specific indices as done in the Rust implementation
+  const bytes = Buffer.from([
+    randomness[0],
+    randomness[4],
+    randomness[8],
+    randomness[12],
+    randomness[16],
+    randomness[20],
+    randomness[24],
+    randomness[28],
+  ]);
+
+  // Interpret as little-endian u64
+  return new BN(bytes, "le");
 }
