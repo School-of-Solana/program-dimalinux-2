@@ -13,7 +13,8 @@
     "lint:fix": "eslint . --ext .ts,.svelte --fix",
     "format": "prettier \"**/*.{js,ts,tsx,jsx,json,css,scss,html,svelte,md}\" --check",
     "format:fix": "prettier \"**/*.{js,ts,tsx,jsx,json,css,scss,html,svelte,md}\" -w",
-    "fix": "yarn lint:fix && yarn format:fix && yarn check"
+    "fix": "yarn lint:fix && yarn format:fix && yarn check",
+    "validate": "yarn check && yarn lint && yarn format"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1"

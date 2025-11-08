@@ -43,12 +43,12 @@ function parseHash(): Route {
 
 export const currentRoute = routeStore;
 
-export function navigate(to: string) {
+export function navigate(to: string): void {
   const target = to.startsWith("/") ? "#" + to : to.startsWith("#") ? to : "#/" + to;
   window.location.hash = target;
 }
 
-export function initRouter() {
+export function initRouter(): void {
   function update() {
     routeStore.set(parseHash());
   }

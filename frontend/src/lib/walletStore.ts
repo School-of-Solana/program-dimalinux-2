@@ -27,31 +27,37 @@ export class WalletNotSelectedError extends WalletError {
 }
 
 export function getLocalStorage<T>(key: string, defaultValue: T | null = null): T | null {
+  // Check for browser environment
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return defaultValue;
+  }
+
   try {
-    const value = localStorage.getItem(key);
+    const value = window.localStorage.getItem(key);
     if (value) {
       return JSON.parse(value) as T;
     }
   } catch (error) {
-    if (typeof window !== "undefined") {
-      console.error(error);
-    }
+    console.error(error);
   }
 
   return defaultValue;
 }
 
 export function setLocalStorage<T>(key: string, value: T | null = null): void {
+  // Check for browser environment
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return;
+  }
+
   try {
     if (value === null) {
-      localStorage.removeItem(key);
+      window.localStorage.removeItem(key);
     } else {
-      localStorage.setItem(key, JSON.stringify(value));
+      window.localStorage.setItem(key, JSON.stringify(value));
     }
   } catch (error) {
-    if (typeof window !== "undefined") {
-      console.error(error);
-    }
+    console.error(error);
   }
 }
 
@@ -107,7 +113,7 @@ export interface WalletStore {
 
 export const walletStore = createWalletStore();
 
-function addAdapterEventListeners(adapter: Adapter) {
+function addAdapterEventListeners(adapter: Adapter): void {
   const { onError, wallets } = get(walletStore);
 
   wallets.forEach(({ adapter }) => {
@@ -118,7 +124,7 @@ function addAdapterEventListeners(adapter: Adapter) {
   adapter.on("error", onError);
 }
 
-async function autoConnect() {
+async function autoConnect(): Promise<void> {
   const { adapter } = get(walletStore);
 
   try {
@@ -126,6 +132,7 @@ async function autoConnect() {
     await adapter?.connect();
   } catch (error: unknown) {
     // Clear the selected wallet
+    console.warn(error);
     walletStore.resetWallet();
     // Don't throw error, but onError will still be called
   } finally {
@@ -188,7 +195,7 @@ function createWalletStore() {
     signMessage: undefined,
   });
 
-  function updateWalletState(adapter: Adapter | null) {
+  function updateWalletState(adapter: Adapter | null): void {
     updateAdapter(adapter);
     update((store: WalletStore) => ({
       ...store,
@@ -204,11 +211,11 @@ function createWalletStore() {
     }
 
     if (shouldAutoConnect()) {
-      autoConnect();
+      void autoConnect();
     }
   }
 
-  function updateWalletName(name: WalletName | null) {
+  function updateWalletName(name: WalletName | null): void {
     const { localStorageKey, walletsByName } = get(walletStore);
 
     const adapter = walletsByName?.[name as WalletName] ?? null;
@@ -217,7 +224,7 @@ function createWalletStore() {
     updateWalletState(adapter);
   }
 
-  function updateAdapter(adapter: Adapter | null) {
+  function updateAdapter(adapter: Adapter | null): void {
     removeAdapterEventListeners();
 
     let signTransaction: SignerWalletAdapter["signTransaction"] | undefined = undefined;
@@ -356,7 +363,7 @@ function newError(error: WalletError): WalletError {
   return error;
 }
 
-function onConnect() {
+function onConnect(): void {
   const { adapter } = get(walletStore);
   if (!adapter) {
     return;
@@ -368,11 +375,11 @@ function onConnect() {
   });
 }
 
-function onDisconnect() {
+function onDisconnect(): void {
   walletStore.resetWallet();
 }
 
-function onReadyStateChange(this: Adapter, readyState: WalletReadyState) {
+function onReadyStateChange(this: Adapter, readyState: WalletReadyState): void {
   const { adapter, wallets } = get(walletStore);
   if (!adapter) {
     return;

@@ -1,10 +1,4 @@
-import {
-  Connection,
-  PublicKey,
-  SystemProgram,
-  type TransactionSignature,
-  clusterApiUrl,
-} from "@solana/web3.js";
+import { Connection, PublicKey, type TransactionSignature, clusterApiUrl } from "@solana/web3.js";
 import { Program, AnchorProvider, utils, BN, setProvider, type Idl } from "@coral-xyz/anchor";
 import idl from "../idl/raffle.json";
 import type { Raffle } from "../idl/types/raffle";
@@ -15,11 +9,12 @@ new PublicKey(idl.address);
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 export interface RaffleState {
-  owner: PublicKey;
+  raffleManager: PublicKey;
   ticketPrice: BN;
-  endTime: BN;
-  winner: PublicKey | null;
   maxTickets: number;
+  endTime: BN;
+  winnerIndex: number | null;
+  drawWinnerStarted: boolean;
   claimed: boolean;
   entrants: PublicKey[];
 }
@@ -45,17 +40,7 @@ export function getRaffleProgram(): Program<Raffle> {
 
 export async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
   const program = getRaffleProgram();
-  const raw: any = await (program.account as any).raffleState.fetch(pda);
-  // Normalize snake_case -> camelCase if necessary
-  return {
-    owner: raw.owner,
-    ticketPrice: raw.ticketPrice ?? raw.ticket_price,
-    endTime: raw.endTime ?? raw.end_time,
-    winner: raw.winner ?? null,
-    maxTickets: raw.maxTickets ?? raw.max_tickets,
-    claimed: raw.claimed,
-    entrants: raw.entrants || [],
-  };
+  return (await program.account.raffleState.fetch(pda, "confirmed")) as RaffleState;
 }
 
 /**
@@ -79,14 +64,16 @@ export async function createRaffleOnChain(
     .accounts({
       raffleOwner: raffleOwner,
       raffleState: raffleStatePda,
-      systemProgram: SystemProgram.programId,
     })
     .rpc({ commitment: "confirmed" });
 
   return [signature, raffleStatePda];
 }
 
-export async function buyTickets(pda: PublicKey, numberOfTickets: number) {
+export async function buyTickets(
+  pda: PublicKey,
+  numberOfTickets: number
+): Promise<TransactionSignature> {
   const program = getRaffleProgram();
   const buyer = program.provider.publicKey!;
   return await program.methods
@@ -94,38 +81,61 @@ export async function buyTickets(pda: PublicKey, numberOfTickets: number) {
     .accounts({
       buyer,
       raffleState: pda,
-      systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc({ commitment: "confirmed" });
 }
 
-export async function drawWinner(pda: PublicKey) {
+export async function drawWinner(pda: PublicKey): Promise<TransactionSignature> {
   const program = getRaffleProgram();
-  const raffleOwner = program.provider.publicKey!;
+  const oraclePayer = program.provider.publicKey!;
   return await program.methods
     .drawWinner()
     .accounts({
-      raffleOwner,
+      oraclePayer,
       raffleState: pda,
-      systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc({ commitment: "confirmed" });
 }
 
-export async function claimPrize(pda: PublicKey) {
+export async function claimPrize(pda: PublicKey): Promise<TransactionSignature> {
   const program = getRaffleProgram();
-  const winner = program.provider.publicKey!;
+
+  const raffleState = await getRaffleState(pda);
+  if (raffleState.winnerIndex === null || raffleState.winnerIndex === undefined) {
+    throw new Error("Winner has not been drawn yet");
+  }
+
+  const winner = raffleState.entrants[raffleState.winnerIndex];
+  if (!winner) {
+    throw new Error("Winner unknown (corrupted raffle state?)");
+  }
+
   return await program.methods
     .claimPrize()
     .accounts({
       winner,
       raffleState: pda,
-      systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc({ commitment: "confirmed" });
 }
 
-export function getRaffleStateAddress(raffleOwner: PublicKey, endTime: BN, programID: PublicKey) {
+export async function closeRaffle(pda: PublicKey): Promise<TransactionSignature> {
+  const program = getRaffleProgram();
+  const raffleManager = program.provider.publicKey!;
+  return await program.methods
+    .closeRaffle()
+    .accounts({
+      raffleManager,
+      raffleState: pda,
+    })
+    .rpc({ commitment: "confirmed" });
+}
+
+export function getRaffleStateAddress(
+  raffleOwner: PublicKey,
+  endTime: BN,
+  programID: PublicKey
+): [PublicKey, number] {
   const RAFFLE_SEED = "RaffleSeed";
   return PublicKey.findProgramAddressSync(
     [
@@ -135,4 +145,14 @@ export function getRaffleStateAddress(raffleOwner: PublicKey, endTime: BN, progr
     ],
     programID
   );
+}
+
+/**
+ * Fetches all raffle state accounts from the program.
+ * @returns Array of tuples containing the PDA PublicKey and the RaffleState data
+ */
+export async function getAllRaffles(): Promise<Array<[PublicKey, RaffleState]>> {
+  const program = getRaffleProgram();
+  const accounts = await program.account.raffleState.all();
+  return accounts.map((account) => [account.publicKey, account.account as RaffleState]);
 }

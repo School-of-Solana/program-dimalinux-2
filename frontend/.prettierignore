@@ -5,6 +5,8 @@ build/
 .vite/
 *.lock
 *.log
+# Generated IDL files (keep original formatting to detect changes)
+src/idl/
 # Misc
 .env
 .env.*

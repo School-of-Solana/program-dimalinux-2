@@ -17,13 +17,13 @@
 
   let ticketPriceLamports: number = Math.round(ticketPrice * LAMPORTS_PER_SOL);
 
-  function pad(n: number) {
+  function pad(n: number): string {
     return n.toString().padStart(2, "0");
   }
-  function formatDateLocal(d: Date) {
+  function formatDateLocal(d: Date): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
-  function formatTimeLocal(d: Date) {
+  function formatTimeLocal(d: Date): string {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
@@ -34,7 +34,11 @@
     if (!expirationTime) expirationTime = formatTimeLocal(oneWeek);
   });
 
-  function parseDateTimeToEpoch(dateStr: string, timeStr: string, mode: "local" | "utc") {
+  function parseDateTimeToEpoch(
+    dateStr: string,
+    timeStr: string,
+    mode: "local" | "utc"
+  ): number | null {
     if (!dateStr) return null;
     const dateParts = dateStr.split("-").map(Number);
     if (dateParts.length !== 3) return null;
@@ -42,26 +46,58 @@
     const timeParts = (timeStr || "00:00").split(":").map(Number);
     const [hh = 0, mm = 0] = timeParts;
     if ([y, m, d, hh, mm].some((v) => Number.isNaN(v))) return null;
+    // Always calculate epoch in UTC for blockchain consistency
+    // If mode is "local", interpret the input as local time and convert to UTC
     if (mode === "utc") {
       const ms = Date.UTC(y, m - 1, d, hh, mm, 0, 0);
       return Math.floor(ms / 1000);
     } else {
+      // User entered local time - convert to UTC epoch
       const ms = new Date(y, m - 1, d, hh, mm, 0, 0).getTime();
       return Math.floor(ms / 1000);
     }
   }
 
-  $: if (expirationDate && !expirationTime) {
-    expirationTime = "00:00";
-  }
-  $: expirationEpoch = parseDateTimeToEpoch(expirationDate, expirationTime, tzMode);
+  // Track the previous timezone mode to detect changes
+  let prevTzMode: "local" | "utc" = tzMode;
 
-  function handleMaxTicketsInput(e: Event) {
+  // Manual update to avoid reactive cycles
+  function updateInputFieldsForTimezone(): void {
+    if (expirationEpoch === null) return;
+    const d = new Date(expirationEpoch * 1000);
+    if (tzMode === "utc") {
+      // Show UTC values in the input fields
+      expirationDate = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+      expirationTime = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    } else {
+      // Show local values in the input fields
+      expirationDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      expirationTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+  }
+
+  // Watch for timezone changes
+  $: {
+    if (tzMode !== prevTzMode) {
+      updateInputFieldsForTimezone();
+      prevTzMode = tzMode;
+    }
+  }
+
+  // Calculate epoch whenever inputs change
+  $: {
+    if (expirationDate && !expirationTime) {
+      expirationTime = "00:00";
+    }
+    expirationEpoch = parseDateTimeToEpoch(expirationDate, expirationTime, tzMode);
+  }
+
+  function handleMaxTicketsInput(e: Event): void {
     const target = e.target as HTMLInputElement;
     const v = parseInt(target.value || "", 10);
     maxTickets = Number.isNaN(v) ? 0 : Math.max(1, v);
   }
-  function handleTicketPriceInput(e: Event) {
+  function handleTicketPriceInput(e: Event): void {
     const target = e.target as HTMLInputElement;
     const v = parseFloat(target.value || "");
     ticketPrice = Number.isNaN(v) ? 0 : v;
@@ -75,7 +111,7 @@
   let raffleError: string | null = null;
   let createdRafflePda: string | null = null;
 
-  async function createRaffleClicked() {
+  async function createRaffleClicked(): Promise<void> {
     raffleTxSig = null;
     raffleExplorerUrl = null;
     raffleError = null;
@@ -125,7 +161,7 @@
       placeholder="Enter price in SOL"
     />
   </div>
-  <div class="price-preview preview">Lamports: {ticketPriceLamports}</div>
+  <div class="price-preview preview">{ticketPrice} SOL = {ticketPriceLamports} lamports</div>
   <fieldset class="expiration-row">
     <legend>Raffle End:</legend>
     <div class="expiration-controls" role="group" aria-label="Expiration controls">
@@ -163,7 +199,7 @@
     {#if expirationEpoch}
       <div class="expiration-preview preview">
         <span class="epoch-line"
-          ><span class="epoch-label">Epoch seconds:</span>&nbsp;<span class="epoch-value"
+          ><span class="epoch-label">UTC epoch seconds:</span>&nbsp;<span class="epoch-value"
             >{expirationEpoch}</span
           ></span
         >
@@ -193,8 +229,8 @@
               >
             </div>
             <div class="pda-link">
-              Owner tools: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}?tab=owner`}
-                >manage</a
+              Raffle Manager tools: <a
+                href={`#/raffle/${encodeURIComponent(createdRafflePda)}?tab=owner`}>manage</a
               >
             </div>
           {/if}

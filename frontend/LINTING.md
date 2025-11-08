@@ -37,6 +37,7 @@ The frontend linting and formatting setup now mirrors the anchor_project setup, 
 ## Key Linting Rules (TypeScript & Svelte)
 
 ### Errors
+
 - `@typescript-eslint/no-unused-vars` - Catch unused variables
 - `@typescript-eslint/no-explicit-any` - Ban `any` type
 - `@typescript-eslint/no-floating-promises` - Require promise handling
@@ -47,6 +48,7 @@ The frontend linting and formatting setup now mirrors the anchor_project setup, 
 - `svelte/valid-compile` - Ensure Svelte components compile correctly
 
 ### Warnings
+
 - `@typescript-eslint/explicit-function-return-type` - Encourage return types
 - `svelte/no-at-html-tags` - Warn about `@html` usage
 - `prettier/prettier` - Formatting issues
@@ -54,6 +56,7 @@ The frontend linting and formatting setup now mirrors the anchor_project setup, 
 ## Svelte-Specific Features
 
 The setup includes:
+
 - **eslint-plugin-svelte** - Svelte component linting
 - **svelte-eslint-parser** - Parse `.svelte` files correctly
 - **prettier-plugin-svelte** - Format Svelte components
@@ -93,6 +96,7 @@ yarn build
 ## Consistency with anchor_project
 
 Both projects now share:
+
 - ✅ Same ESLint rules (with Svelte additions for frontend)
 - ✅ Same Prettier configuration
 - ✅ Same script naming convention (lint, lint:fix, format, format:fix, fix)
@@ -102,6 +106,7 @@ Both projects now share:
 ## Differences (Frontend-Specific)
 
 The frontend has additional support for:
+
 - 📦 Svelte component linting and formatting
 - 🌐 Browser globals (window, document, etc.)
 - 🎨 Svelte reactive syntax (`$:`, `$$`)

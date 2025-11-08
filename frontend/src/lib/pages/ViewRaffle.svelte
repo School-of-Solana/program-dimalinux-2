@@ -1,8 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getRaffleState, drawWinner, claimPrize, buyTickets, type RaffleState } from "../Raffle";
+  import {
+    getRaffleState,
+    drawWinner,
+    claimPrize,
+    buyTickets,
+    closeRaffle,
+    type RaffleState,
+  } from "../Raffle";
   import { walletStore } from "../walletStore";
   import { PublicKey } from "@solana/web3.js";
+  import { navigate } from "../router";
 
   export let pda: string; // raffle PDA
 
@@ -16,7 +24,7 @@
   let busy = false;
   let qty = 1;
 
-  async function load() {
+  async function load(): Promise<void> {
     loading = true;
     error = null;
     buyError = null;
@@ -25,19 +33,28 @@
     actionSig = null;
     try {
       raffleState = await getRaffleState(new PublicKey(pda));
-    } catch (e: any) {
-      error = e.message || String(e);
+    } catch (e: unknown) {
+      error = e instanceof Error ? e.message : String(e);
     } finally {
       loading = false;
     }
   }
   onMount(load);
 
-  function refreshAfterDelay() {
+  function refreshAfterDelay(): void {
     setTimeout(load, 1200);
   }
 
-  async function buyClicked() {
+  function safeToNumber(bn: { toNumber: () => number; toString: () => string }): number {
+    try {
+      return bn.toNumber();
+    } catch {
+      // If toNumber fails, parse as string (for very large numbers)
+      return parseInt(bn.toString(), 10);
+    }
+  }
+
+  async function buyClicked(): Promise<void> {
     if (!raffleState) return;
     buyError = null;
     buySig = null;
@@ -47,13 +64,13 @@
       const sig = await buyTickets(new PublicKey(pda), qty);
       buySig = sig;
       refreshAfterDelay();
-    } catch (e: any) {
-      buyError = e.message || String(e);
+    } catch (e: unknown) {
+      buyError = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
     }
   }
-  async function drawClicked() {
+  async function drawClicked(): Promise<void> {
     actionError = null;
     actionSig = null;
     busy = true;
@@ -61,13 +78,13 @@
       const sig = await drawWinner(new PublicKey(pda));
       actionSig = sig;
       refreshAfterDelay();
-    } catch (e: any) {
-      actionError = e.message || String(e);
+    } catch (e: unknown) {
+      actionError = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
     }
   }
-  async function claimClicked() {
+  async function claimClicked(): Promise<void> {
     actionError = null;
     actionSig = null;
     busy = true;
@@ -75,8 +92,24 @@
       const sig = await claimPrize(new PublicKey(pda));
       actionSig = sig;
       refreshAfterDelay();
-    } catch (e: any) {
-      actionError = e.message || String(e);
+    } catch (e: unknown) {
+      actionError = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function closeClicked(): Promise<void> {
+    actionError = null;
+    actionSig = null;
+    busy = true;
+    try {
+      const sig = await closeRaffle(new PublicKey(pda));
+      actionSig = sig;
+      // Navigate to home page since the raffle account no longer exists
+      setTimeout(() => navigate("/"), 1000);
+    } catch (e: unknown) {
+      actionError = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
     }
@@ -84,14 +117,17 @@
 
   // derived
   const LAMPORTS_PER_SOL = 1_000_000_000;
-  $: ownerStr = raffleState?.owner ? raffleState.owner.toBase58() : "";
+  $: raffleManagerStr = raffleState?.raffleManager ? raffleState.raffleManager.toBase58() : "";
   $: userKey = $walletStore?.publicKey ? $walletStore.publicKey.toBase58() : null;
-  $: isOwner = !!ownerStr && !!userKey && ownerStr === userKey;
-  $: ticketPriceLamports = raffleState ? raffleState.ticketPrice.toNumber() : 0;
+  $: isRaffleManager = !!raffleManagerStr && !!userKey && raffleManagerStr === userKey;
+  $: ticketPriceLamports = raffleState ? safeToNumber(raffleState.ticketPrice) : 0;
   $: ticketPriceSol = ticketPriceLamports / LAMPORTS_PER_SOL;
-  $: endTimeUnix = raffleState ? raffleState.endTime.toNumber() : null;
+  $: endTimeUnix = raffleState ? safeToNumber(raffleState.endTime) : null;
   $: ended = endTimeUnix ? Date.now() / 1000 > endTimeUnix : false;
-  $: winnerStr = raffleState?.winner ? raffleState.winner.toBase58() : null;
+  $: winnerStr =
+    raffleState?.winnerIndex !== null && raffleState?.winnerIndex !== undefined
+      ? raffleState.entrants[raffleState.winnerIndex]?.toBase58() || null
+      : null;
   $: claimed = !!raffleState?.claimed;
   $: winnerDrawn = !!winnerStr;
   $: userIsWinner = !!winnerStr && !!userKey && winnerStr === userKey;
@@ -100,11 +136,13 @@
   $: soldOut = maxTickets > 0 && ticketsSold >= maxTickets;
   $: remaining = Math.max(0, maxTickets - ticketsSold);
   $: canBuy = $walletStore.connected && !ended && !soldOut && !winnerDrawn;
-  $: canDraw = isOwner && !winnerDrawn && (ended || soldOut);
-  $: canClaim = userIsWinner && winnerDrawn && !claimed;
+  $: canDraw = isRaffleManager && !winnerDrawn && (ended || soldOut) && ticketsSold > 0;
+  $: canClaim = $walletStore.connected && winnerDrawn && !claimed;
+  $: isClaimingForSelf = userIsWinner;
+  $: canClose = isRaffleManager && (claimed || ticketsSold === 0);
   $: totalSol = qty * ticketPriceSol || 0;
 
-  function clampQty() {
+  function clampQty(): void {
     if (qty < 1) qty = 1;
     if (remaining && qty > remaining) qty = remaining;
   }
@@ -121,7 +159,7 @@
   {:else if raffleState}
     <table class="raffle-info">
       <tbody>
-        <tr><th>Owner</th><td>{ownerStr}</td></tr>
+        <tr><th>Raffle Manager</th><td>{raffleManagerStr}</td></tr>
         <tr><th>Ticket Price</th><td>{ticketPriceSol} SOL</td></tr>
         <tr><th>Max Tickets</th><td>{maxTickets}</td></tr>
         <tr><th>Sold</th><td>{ticketsSold}</td></tr>
@@ -147,7 +185,12 @@
         <button class="draw-btn" on:click={drawClicked} disabled={busy}>Draw Winner</button>
       {/if}
       {#if canClaim}
-        <button class="claim-btn" on:click={claimClicked} disabled={busy}>Claim Prize</button>
+        <button class="claim-btn" on:click={claimClicked} disabled={busy}>
+          {isClaimingForSelf ? "Claim Prize" : "Facilitate Claim"}
+        </button>
+      {/if}
+      {#if canClose}
+        <button class="close-btn" on:click={closeClicked} disabled={busy}>Close Raffle</button>
       {/if}
       <button class="refresh-btn" on:click={load} disabled={busy}>Refresh</button>
     </div>

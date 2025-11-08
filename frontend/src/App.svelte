@@ -1,13 +1,13 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import WalletMultiButton from "./lib/WalletMultiButton.svelte";
   import WalletProvider from "./lib/WalletProvider.svelte";
   import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
   import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-  import { onMount } from "svelte";
   import { currentRoute, initRouter } from "./lib/router";
   import Home from "./lib/pages/Home.svelte";
   import CreateRaffle from "./lib/pages/CreateRaffle.svelte";
-  import ManageRaffle from "./lib/pages/ManageRaffle.svelte";
+  import ViewRaffle from "./lib/pages/ViewRaffle.svelte";
 
   const localStorageKey = "walletAdapter";
   const walletAdapters = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
@@ -32,7 +32,7 @@
     {:else if $currentRoute.segments[0] === "create"}
       <CreateRaffle />
     {:else if $currentRoute.segments[0] === "raffle" && $currentRoute.params.pda}
-      <ManageRaffle pda={$currentRoute.params.pda} />
+      <ViewRaffle pda={$currentRoute.params.pda} />
     {:else}
       <p>Page not found.</p>
     {/if}

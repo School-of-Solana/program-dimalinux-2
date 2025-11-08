@@ -19,20 +19,22 @@
       return byInstalledStatus(walletAdapterAndReadyStateA, walletAdapterAndReadyStateB);
     });
 
-  async function handleConnect(wallet: Adapter) {
+  async function handleConnect(wallet: Adapter): Promise<void> {
     $walletStore.select(wallet.name);
     await $walletStore.connect();
   }
 
-  async function copyToClipboard() {
-    await navigator.clipboard.writeText($walletStore.publicKey!.toBase58());
+  async function copyToClipboard(): Promise<void> {
+    if (typeof window !== "undefined" && window.navigator?.clipboard) {
+      await window.navigator.clipboard.writeText($walletStore.publicKey!.toBase58());
+    }
   }
 
-  async function handleDisconnect() {
+  async function handleDisconnect(): Promise<void> {
     await $walletStore.disconnect();
   }
 
-  function abbrAddress(address: string) {
+  function abbrAddress(address: string): string {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   }
 </script>
