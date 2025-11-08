@@ -17,9 +17,13 @@ function parseHash(): Route {
 
   if (queryPart) {
     for (const kv of queryPart.split("&")) {
-      if (!kv) continue;
+      if (!kv) {
+        continue;
+      }
       const [k, v] = kv.split("=");
-      if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || "");
+      if (k) {
+        params[decodeURIComponent(k)] = decodeURIComponent(v || "");
+      }
     }
   }
 

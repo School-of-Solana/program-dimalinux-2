@@ -16,10 +16,7 @@
       return walletAdapterAndReadyState.readyState === "Installed";
     })
     .sort((walletAdapterAndReadyStateA, walletAdapterAndReadyStateB) => {
-      return byInstalledStatus(
-        walletAdapterAndReadyStateA,
-        walletAdapterAndReadyStateB,
-      );
+      return byInstalledStatus(walletAdapterAndReadyStateA, walletAdapterAndReadyStateB);
     });
 
   async function handleConnect(wallet: Adapter) {
@@ -51,20 +48,14 @@
   >
   <ul id="connected-wallet-menu" popover="auto">
     <li>
-      <button class="wallet-op-btn" onclick={copyToClipboard}
-        >Copy Address</button
-      >
+      <button class="wallet-op-btn" onclick={copyToClipboard}>Copy Address</button>
     </li>
     <li>
-      <button class="wallet-op-btn" onclick={handleDisconnect}
-        >Disconnect</button
-      >
+      <button class="wallet-op-btn" onclick={handleDisconnect}>Disconnect</button>
     </li>
   </ul>
 {:else}
-  <button id="select-wallet-btn" popovertarget="select-wallet-modal"
-    >Connect Solana Wallet</button
-  >
+  <button id="select-wallet-btn" popovertarget="select-wallet-modal">Connect Solana Wallet</button>
   <ul id="select-wallet-modal" popover="auto">
     {#each installedWalletAdaptersWithReadyState as wallet}
       <li>
@@ -76,11 +67,7 @@
             }}
             type="button"
           >
-            <img
-              alt="icon of {wallet.adapter.name}"
-              src={wallet.adapter.icon}
-              width="38px"
-            />
+            <img alt="icon of {wallet.adapter.name}" src={wallet.adapter.icon} width="38px" />
             <span>{wallet.adapter.name}</span></button
           >
         {/if}

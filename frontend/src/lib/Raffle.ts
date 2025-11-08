@@ -5,14 +5,7 @@ import {
   type TransactionSignature,
   clusterApiUrl,
 } from "@solana/web3.js";
-import {
-  Program,
-  AnchorProvider,
-  utils,
-  BN,
-  setProvider,
-  type Idl,
-} from "@coral-xyz/anchor";
+import { Program, AnchorProvider, utils, BN, setProvider, type Idl } from "@coral-xyz/anchor";
 import idl from "../idl/raffle.json";
 import type { Raffle } from "../idl/types/raffle";
 import { walletStore } from "./walletStore";
@@ -32,14 +25,14 @@ export interface RaffleState {
 }
 
 function getProvider(): AnchorProvider {
-  let wallet = get(walletStore);
-  if (!wallet || !wallet.publicKey) {
+  const wallet = get(walletStore);
+  if (!wallet?.publicKey) {
     throw new Error("Wallet not connected");
   }
   const provider = new AnchorProvider(
     connection,
     get(walletStore) as any,
-    AnchorProvider.defaultOptions(),
+    AnchorProvider.defaultOptions()
   );
   setProvider(provider);
   return provider;
@@ -74,18 +67,14 @@ export async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
 export async function createRaffleOnChain(
   ticketPrice: BN,
   maxTickets: number,
-  endTime: BN,
+  endTime: BN
 ): Promise<[TransactionSignature, PublicKey]> {
-  let raffle = getRaffleProgram();
+  const raffle = getRaffleProgram();
   const raffleOwner: PublicKey = raffle.provider.publicKey!;
 
-  const [raffleStatePda] = getRaffleStateAddress(
-    raffleOwner,
-    endTime,
-    raffle.programId,
-  );
+  const [raffleStatePda] = getRaffleStateAddress(raffleOwner, endTime, raffle.programId);
 
-  let signature: TransactionSignature = await raffle.methods
+  const signature: TransactionSignature = await raffle.methods
     .createRaffle(ticketPrice, maxTickets, endTime)
     .accounts({
       raffleOwner: raffleOwner,
@@ -136,11 +125,7 @@ export async function claimPrize(pda: PublicKey) {
     .rpc();
 }
 
-export function getRaffleStateAddress(
-  raffleOwner: PublicKey,
-  endTime: BN,
-  programID: PublicKey,
-) {
+export function getRaffleStateAddress(raffleOwner: PublicKey, endTime: BN, programID: PublicKey) {
   const RAFFLE_SEED = "RaffleSeed";
   return PublicKey.findProgramAddressSync(
     [
@@ -148,6 +133,6 @@ export function getRaffleStateAddress(
       raffleOwner.toBuffer(),
       endTime.toArrayLike(Buffer, "le", 8),
     ],
-    programID,
+    programID
   );
 }

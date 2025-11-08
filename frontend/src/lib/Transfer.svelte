@@ -25,9 +25,7 @@
     });
 
     const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-    let recentBlockhash = await connection
-      .getLatestBlockhash()
-      .then((res) => res.blockhash);
+    const recentBlockhash = await connection.getLatestBlockhash().then((res) => res.blockhash);
 
     // create a transaction message
     const message = new TransactionMessage({

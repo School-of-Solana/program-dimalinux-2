@@ -10,10 +10,7 @@
   import ManageRaffle from "./lib/pages/ManageRaffle.svelte";
 
   const localStorageKey = "walletAdapter";
-  const walletAdapters = [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-  ];
+  const walletAdapters = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
 
   onMount(() => initRouter());
 </script>

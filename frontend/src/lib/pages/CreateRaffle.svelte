@@ -34,11 +34,7 @@
     if (!expirationTime) expirationTime = formatTimeLocal(oneWeek);
   });
 
-  function parseDateTimeToEpoch(
-    dateStr: string,
-    timeStr: string,
-    mode: "local" | "utc",
-  ) {
+  function parseDateTimeToEpoch(dateStr: string, timeStr: string, mode: "local" | "utc") {
     if (!dateStr) return null;
     const dateParts = dateStr.split("-").map(Number);
     if (dateParts.length !== 3) return null;
@@ -58,11 +54,7 @@
   $: if (expirationDate && !expirationTime) {
     expirationTime = "00:00";
   }
-  $: expirationEpoch = parseDateTimeToEpoch(
-    expirationDate,
-    expirationTime,
-    tzMode,
-  );
+  $: expirationEpoch = parseDateTimeToEpoch(expirationDate, expirationTime, tzMode);
 
   function handleMaxTicketsInput(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -75,7 +67,7 @@
     ticketPrice = Number.isNaN(v) ? 0 : v;
   }
   $: ticketPriceLamports = Math.round(
-    (Number.isFinite(ticketPrice) ? ticketPrice : 0) * LAMPORTS_PER_SOL,
+    (Number.isFinite(ticketPrice) ? ticketPrice : 0) * LAMPORTS_PER_SOL
   );
 
   let raffleTxSig: string | null = null;
@@ -89,12 +81,11 @@
     raffleError = null;
     createdRafflePda = null;
     try {
-      const [signature, rafflePda]: [TransactionSignature, PublicKey] =
-        await createRaffleOnChain(
-          new BN(ticketPriceLamports),
-          maxTickets,
-          new BN(expirationEpoch!),
-        );
+      const [signature, rafflePda]: [TransactionSignature, PublicKey] = await createRaffleOnChain(
+        new BN(ticketPriceLamports),
+        maxTickets,
+        new BN(expirationEpoch!)
+      );
       raffleTxSig = signature;
       createdRafflePda = rafflePda.toBase58();
       raffleExplorerUrl = `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
@@ -137,11 +128,7 @@
   <div class="price-preview preview">Lamports: {ticketPriceLamports}</div>
   <fieldset class="expiration-row">
     <legend>Raffle End:</legend>
-    <div
-      class="expiration-controls"
-      role="group"
-      aria-label="Expiration controls"
-    >
+    <div class="expiration-controls" role="group" aria-label="Expiration controls">
       <div class="control tz-control">
         <label for="tzMode" class="small-label">Zone</label>
         <select
@@ -176,8 +163,8 @@
     {#if expirationEpoch}
       <div class="expiration-preview preview">
         <span class="epoch-line"
-          ><span class="epoch-label">Epoch seconds:</span>&nbsp;<span
-            class="epoch-value">{expirationEpoch}</span
+          ><span class="epoch-label">Epoch seconds:</span>&nbsp;<span class="epoch-value"
+            >{expirationEpoch}</span
           ></span
         >
       </div>
@@ -187,10 +174,8 @@
     {#if $walletStore.connected}
       <button
         on:click={async () => await createRaffleClicked()}
-        disabled={!(maxTickets > 0) ||
-          !(ticketPrice > 0) ||
-          !expirationDate ||
-          !expirationTime}>Create Raffle</button
+        disabled={!(maxTickets > 0) || !(ticketPrice > 0) || !expirationDate || !expirationTime}
+        >Create Raffle</button
       >
       {#if raffleTxSig && raffleExplorerUrl}
         <div class="tx-result">
@@ -203,10 +188,14 @@
           </div>
           {#if createdRafflePda}
             <div class="pda-link">
-              Open raffle: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}`}>{createdRafflePda}</a>
+              Open raffle: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}`}
+                >{createdRafflePda}</a
+              >
             </div>
             <div class="pda-link">
-              Owner tools: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}?tab=owner`}>manage</a>
+              Owner tools: <a href={`#/raffle/${encodeURIComponent(createdRafflePda)}?tab=owner`}
+                >manage</a
+              >
             </div>
           {/if}
         </div>
