@@ -19,8 +19,8 @@
   <h1>Solana Raffle</h1>
   <div class="top-bar">
     <div class="left-nav">
-      <a href="#/">Home</a>
-      <a href="#/create">Create</a>
+      <a href="#/" class:active={$currentRoute.segments.length === 0}>Home</a>
+      <a href="#/create" class:active={$currentRoute.segments[0] === "create"}>Create</a>
     </div>
     <WalletProvider {localStorageKey} wallets={walletAdapters} autoConnect />
     <WalletMultiButton />
@@ -58,12 +58,22 @@
   }
   .left-nav a {
     text-decoration: none;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 1rem;
     border-radius: 4px;
     border: 1px solid transparent;
+    transition: all 0.2s;
+    color: #94a3b8;
   }
   .left-nav a:hover {
-    border-color: #ccc;
+    border-color: #64748b;
+    color: #cbd5e1;
+  }
+  .left-nav a.active {
+    background: #35fff2;
+    color: #0f172a;
+    border-color: #35fff2;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(53, 255, 242, 0.3);
   }
   .page-container {
     margin-top: 1rem;

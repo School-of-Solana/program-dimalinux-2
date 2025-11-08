@@ -136,7 +136,7 @@
   $: soldOut = maxTickets > 0 && ticketsSold >= maxTickets;
   $: remaining = Math.max(0, maxTickets - ticketsSold);
   $: canBuy = $walletStore.connected && !ended && !soldOut && !winnerDrawn;
-  $: canDraw = isRaffleManager && !winnerDrawn && (ended || soldOut) && ticketsSold > 0;
+  $: canDraw = !winnerDrawn && (ended || soldOut) && ticketsSold > 0;
   $: canClaim = $walletStore.connected && winnerDrawn && !claimed;
   $: isClaimingForSelf = userIsWinner;
   $: canClose = isRaffleManager && (claimed || ticketsSold === 0);
