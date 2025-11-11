@@ -338,6 +338,6 @@ export class RaffleTestHelper {
    * Fetches the current state of a raffle account.
    */
   async getState(pda: PublicKey): Promise<RaffleState> {
-    return (await this.program.account.raffleState.fetch(pda, "confirmed")) as RaffleState;
+    return await this.program.account.raffleState.fetch(pda, "confirmed");
   }
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { walletStore } from "../walletStore";
-  import { createRaffleOnChain } from "../Raffle";
+  import { createRaffleOnChain } from "../raffleProgram";
   import { onMount } from "svelte";
   import { web3, BN } from "@coral-xyz/anchor";
   import type { TransactionSignature, PublicKey } from "@solana/web3.js";
@@ -30,8 +30,12 @@
   onMount(() => {
     const now = new Date();
     const oneWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    if (!expirationDate) expirationDate = formatDateLocal(oneWeek);
-    if (!expirationTime) expirationTime = formatTimeLocal(oneWeek);
+    if (!expirationDate) {
+      expirationDate = formatDateLocal(oneWeek);
+    }
+    if (!expirationTime) {
+      expirationTime = formatTimeLocal(oneWeek);
+    }
   });
 
   function parseDateTimeToEpoch(
@@ -39,13 +43,19 @@
     timeStr: string,
     mode: "local" | "utc"
   ): number | null {
-    if (!dateStr) return null;
+    if (!dateStr) {
+      return null;
+    }
     const dateParts = dateStr.split("-").map(Number);
-    if (dateParts.length !== 3) return null;
+    if (dateParts.length !== 3) {
+      return null;
+    }
     const [y, m, d] = dateParts;
     const timeParts = (timeStr || "00:00").split(":").map(Number);
     const [hh = 0, mm = 0] = timeParts;
-    if ([y, m, d, hh, mm].some((v) => Number.isNaN(v))) return null;
+    if ([y, m, d, hh, mm].some((v) => Number.isNaN(v))) {
+      return null;
+    }
     // Always calculate epoch in UTC for blockchain consistency
     // If mode is "local", interpret the input as local time and convert to UTC
     if (mode === "utc") {
@@ -63,7 +73,9 @@
 
   // Manual update to avoid reactive cycles
   function updateInputFieldsForTimezone(): void {
-    if (expirationEpoch === null) return;
+    if (expirationEpoch === null) {
+      return;
+    }
     const d = new Date(expirationEpoch * 1000);
     if (tzMode === "utc") {
       // Show UTC values in the input fields

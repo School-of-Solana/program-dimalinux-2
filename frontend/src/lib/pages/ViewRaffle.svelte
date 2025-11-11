@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import {
-    getRaffleState,
-    drawWinner,
-    claimPrize,
     buyTickets,
+    claimPrize,
     closeRaffle,
+    drawWinner,
+    getRaffleState,
     type RaffleState,
-  } from "../Raffle";
+  } from "../raffleProgram";
   import { walletStore } from "../walletStore";
   import { PublicKey } from "@solana/web3.js";
   import { navigate } from "../router";
@@ -42,7 +42,9 @@
   onMount(load);
 
   function refreshAfterDelay(): void {
-    setTimeout(load, 1200);
+    setTimeout(() => {
+      void load();
+    }, 1200);
   }
 
   function safeToNumber(bn: { toNumber: () => number; toString: () => string }): number {
@@ -55,14 +57,15 @@
   }
 
   async function buyClicked(): Promise<void> {
-    if (!raffleState) return;
+    if (!raffleState) {
+      return;
+    }
     buyError = null;
     buySig = null;
     busy = true;
     clampQty();
     try {
-      const sig = await buyTickets(new PublicKey(pda), qty);
-      buySig = sig;
+      buySig = await buyTickets(new PublicKey(pda), qty);
       refreshAfterDelay();
     } catch (e: unknown) {
       buyError = e instanceof Error ? e.message : String(e);
@@ -89,8 +92,7 @@
     actionSig = null;
     busy = true;
     try {
-      const sig = await claimPrize(new PublicKey(pda));
-      actionSig = sig;
+      actionSig = await claimPrize(new PublicKey(pda));
       refreshAfterDelay();
     } catch (e: unknown) {
       actionError = e instanceof Error ? e.message : String(e);
@@ -104,8 +106,7 @@
     actionSig = null;
     busy = true;
     try {
-      const sig = await closeRaffle(new PublicKey(pda));
-      actionSig = sig;
+      actionSig = await closeRaffle(new PublicKey(pda));
       // Navigate to home page since the raffle account no longer exists
       setTimeout(() => navigate("/"), 1000);
     } catch (e: unknown) {
@@ -140,11 +141,15 @@
   $: canClaim = $walletStore.connected && winnerDrawn && !claimed;
   $: isClaimingForSelf = userIsWinner;
   $: canClose = isRaffleManager && (claimed || ticketsSold === 0);
-  $: totalSol = qty * ticketPriceSol || 0;
+  $: totalSol = qty * ticketPriceSol;
 
   function clampQty(): void {
-    if (qty < 1) qty = 1;
-    if (remaining && qty > remaining) qty = remaining;
+    if (qty < 1) {
+      qty = 1;
+    }
+    if (remaining && qty > remaining) {
+      qty = remaining;
+    }
   }
 </script>
 
@@ -169,7 +174,7 @@
             >{endTimeUnix ? new Date(endTimeUnix * 1000).toLocaleString() : "—"}</td
           ></tr
         >
-        <tr><th>Winner</th><td>{winnerStr || "—"}</td></tr>
+        <tr><th>Winner</th><td>{winnerStr ?? "—"}</td></tr>
         {#if winnerDrawn}<tr><th>Claimed</th><td>{claimed ? "Yes" : "No"}</td></tr>{/if}
       </tbody>
     </table>

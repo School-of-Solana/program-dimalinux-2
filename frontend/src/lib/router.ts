@@ -49,13 +49,13 @@ export function navigate(to: string): void {
 }
 
 export function initRouter(): void {
-  function update() {
+  function update(): void {
     routeStore.set(parseHash());
   }
   window.addEventListener("hashchange", update);
   update();
 }
 
-export function getRoute() {
+export function getRoute(): Route {
   return get(routeStore);
 }

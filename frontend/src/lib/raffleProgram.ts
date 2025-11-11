@@ -26,7 +26,7 @@ function getProvider(): AnchorProvider {
   }
   const provider = new AnchorProvider(
     connection,
-    get(walletStore) as any,
+    get(walletStore),
     AnchorProvider.defaultOptions()
   );
   setProvider(provider);
@@ -34,7 +34,8 @@ function getProvider(): AnchorProvider {
 }
 
 export function getRaffleProgram(): Program<Raffle> {
-  // Copilot: We only support Anchor 0.31.1. Do not pass the program ID below.
+  // We only support Anchor >= 0.31.1. Some older versions pass
+  // the program ID below.
   return new Program<Raffle>(idl as Idl, getProvider());
 }
 
@@ -60,6 +61,7 @@ export async function createRaffleOnChain(
   const [raffleStatePda] = getRaffleStateAddress(raffleOwner, endTime, raffle.programId);
 
   const signature: TransactionSignature = await raffle.methods
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     .createRaffle(ticketPrice, maxTickets, endTime)
     .accounts({
       raffleOwner: raffleOwner,
@@ -141,7 +143,8 @@ export function getRaffleStateAddress(
     [
       utils.bytes.utf8.encode(RAFFLE_SEED),
       raffleOwner.toBuffer(),
-      endTime.toArrayLike(Buffer, "le", 8),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      endTime.toArrayLike(Buffer, "le", 8) as Buffer,
     ],
     programID
   );

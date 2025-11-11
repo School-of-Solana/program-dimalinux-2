@@ -6,6 +6,7 @@
   "scripts": {
     "idl:sync": "cp -f ../anchor_project/target/idl/raffle.json src/idl/raffle.json && cp -f ../anchor_project/target/types/raffle.ts src/idl/types/raffle.ts",
     "dev": "vite",
+    "dev:host": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json",
@@ -25,7 +26,6 @@
     "@solana/wallet-adapter-solflare": "^0.6.28",
     "@solana/web3.js": "^1.95.3",
     "@sveltejs/vite-plugin-svelte": "^6.1.4",
-    "@switchboard-xyz/on-demand": "^2.17.6",
     "@tsconfig/svelte": "^5.0.4",
     "@typescript-eslint/eslint-plugin": "^8.46.3",
     "@typescript-eslint/parser": "^8.46.3",

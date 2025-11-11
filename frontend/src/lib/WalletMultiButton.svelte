@@ -2,7 +2,7 @@
   import { type Adapter } from "@solana/wallet-adapter-base";
   import { walletStore, type Wallet } from "./walletStore";
 
-  const byInstalledStatus = (a: Wallet, b: Wallet) => {
+  const byInstalledStatus = (a: Wallet, b: Wallet): number => {
     if (a.readyState === "Installed" && b.readyState !== "Installed") {
       return -1;
     }
@@ -20,7 +20,7 @@
     });
 
   async function handleConnect(wallet: Adapter): Promise<void> {
-    $walletStore.select(wallet.name);
+    await $walletStore.select(wallet.name);
     await $walletStore.connect();
   }
 
@@ -41,11 +41,7 @@
 
 {#if $walletStore.connected}
   <button id="connected-wallet-btn" popovertarget="connected-wallet-menu">
-    <img
-      alt="icon of {$walletStore!.adapter!.name}"
-      src={$walletStore!.adapter!.icon}
-      width="38px"
-    />
+    <img alt="icon of {$walletStore.adapter!.name}" src={$walletStore.adapter!.icon} width="38px" />
     <span>{abbrAddress($walletStore.publicKey!.toBase58())}</span></button
   >
   <ul id="connected-wallet-menu" popover="auto">
@@ -125,20 +121,20 @@
 
   .wallet-item-btn {
     display: flex;
-    align-items: center; /* 垂直居中对齐 */
-    justify-content: flex-start; /* 水平靠左对齐 */
-    width: 100%; /* 使按钮占据父元素的全部宽度 */
-    padding: 10px; /* 可选：设置按钮的内边距 */
-    border: none; /* 可选：去掉按钮的边框 */
-    background: none; /* 可选：去掉按钮的背景 */
-    cursor: pointer; /* 可选：设置鼠标悬停时的指针样式 */
+    align-items: center; /* Vertically center align */
+    justify-content: flex-start; /* Align to the left horizontally */
+    width: 100%; /* Make button take full width of parent element */
+    padding: 10px; /* Optional: Set button padding */
+    border: none; /* Optional: Remove button border */
+    background: none; /* Optional: Remove button background */
+    cursor: pointer; /* Optional: Set cursor style on hover */
   }
 
   .wallet-item-btn img {
-    margin-right: 10px; /* 设置图标与文本之间的间距 */
+    margin-right: 10px; /* Set spacing between icon and text */
   }
 
   .wallet-item-btn span {
-    flex: 1; /* 使文本占据剩余的空间 */
+    flex: 1; /* Make text occupy remaining space */
   }
 </style>

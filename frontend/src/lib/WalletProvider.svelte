@@ -6,7 +6,9 @@
   export let localStorageKey: string;
   export let wallets: Adapter[];
   export let autoConnect = false;
-  export let onError = (error: WalletError) => console.error(error);
+  export let onError = (error: WalletError): void => console.error(error);
 
-  $: wallets && initialize({ wallets, autoConnect, localStorageKey, onError });
+  $: if (wallets) {
+    initialize({ wallets, autoConnect, localStorageKey, onError });
+  }
 </script>

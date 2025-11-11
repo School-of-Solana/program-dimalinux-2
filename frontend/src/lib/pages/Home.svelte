@@ -1,7 +1,7 @@
 <script lang="ts">
   import { navigate } from "../router";
   import { onMount } from "svelte";
-  import { getAllRaffles, type RaffleState } from "../Raffle";
+  import { getAllRaffles, type RaffleState } from "../raffleProgram";
   import type { PublicKey } from "@solana/web3.js";
   import { walletStore } from "../walletStore";
 

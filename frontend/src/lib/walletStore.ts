@@ -100,7 +100,7 @@ export interface WalletStore {
   // wallet methods
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-  select(walletName: WalletName): void;
+  select(walletName: WalletName): Promise<void>;
   sendTransaction(
     transaction: Transaction | VersionedTransaction,
     connection: Connection,
@@ -109,6 +109,23 @@ export interface WalletStore {
   signAllTransactions: SignerWalletAdapterProps["signAllTransactions"] | undefined;
   signMessage: MessageSignerWalletAdapterProps["signMessage"] | undefined;
   signTransaction: SignerWalletAdapterProps["signTransaction"] | undefined;
+}
+
+/**
+ * API returned by createWalletStore for managing wallet state and performing operations.
+ */
+export interface WalletStoreAPI {
+  subscribe: (run: (value: WalletStore) => void) => () => void;
+  resetWallet: () => void;
+  setConnecting: (connecting: boolean) => void;
+  setDisconnecting: (disconnecting: boolean) => void;
+  setReady: (ready: WalletReadyState) => void;
+  updateConfig: (
+    walletConfig: WalletReturnConfig & { walletsByName: Record<WalletName, Adapter> }
+  ) => void;
+  updateWallets: (wallets: Wallet[]) => void;
+  updateStatus: (walletStatus: WalletStatus) => void;
+  updateWallet: (walletName: WalletName) => void;
 }
 
 export const walletStore = createWalletStore();
@@ -171,7 +188,7 @@ async function connect(): Promise<void> {
   }
 }
 
-function createWalletStore() {
+function createWalletStore(): WalletStoreAPI {
   const { subscribe, update } = writable<WalletStore>({
     autoConnect: false,
     wallets: [],
@@ -199,11 +216,11 @@ function createWalletStore() {
     updateAdapter(adapter);
     update((store: WalletStore) => ({
       ...store,
-      name: adapter?.name || null,
+      name: adapter?.name ?? null,
       wallet: adapter,
-      ready: adapter?.readyState || ("Unsupported" as WalletReadyState),
-      publicKey: adapter?.publicKey || null,
-      connected: adapter?.connected || false,
+      ready: adapter?.readyState ?? ("Unsupported" as WalletReadyState),
+      publicKey: adapter?.publicKey ?? null,
+      connected: adapter?.connected ?? false,
     }));
 
     if (!adapter) {
@@ -325,12 +342,12 @@ async function disconnect(): Promise<void> {
   }
 }
 
-export async function initialize({
+export function initialize({
   wallets,
   autoConnect = false,
   localStorageKey = "walletAdapter",
   onError = (error: WalletError) => console.error(error),
-}: WalletPropsConfig): Promise<void> {
+}: WalletPropsConfig): void {
   const walletsByName = wallets.reduce<Record<WalletName, Adapter>>((walletsByName, wallet) => {
     walletsByName[wallet.name] = wallet;
     return walletsByName;
