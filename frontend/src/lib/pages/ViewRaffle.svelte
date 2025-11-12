@@ -6,6 +6,7 @@
     closeRaffle,
     drawWinner,
     getRaffleState,
+    bnToNumber,
     type RaffleState,
   } from "../raffleProgram";
   import { walletStore } from "../walletStore";
@@ -45,15 +46,6 @@
     setTimeout(() => {
       void load();
     }, 1200);
-  }
-
-  function safeToNumber(bn: { toNumber: () => number; toString: () => string }): number {
-    try {
-      return bn.toNumber();
-    } catch {
-      // If toNumber fails, parse as string (for very large numbers)
-      return parseInt(bn.toString(), 10);
-    }
   }
 
   async function buyClicked(): Promise<void> {
@@ -120,9 +112,9 @@
   $: raffleManagerStr = raffleState?.raffleManager ? raffleState.raffleManager.toBase58() : "";
   $: userKey = $walletStore?.publicKey ? $walletStore.publicKey.toBase58() : null;
   $: isRaffleManager = !!raffleManagerStr && !!userKey && raffleManagerStr === userKey;
-  $: ticketPriceLamports = raffleState ? safeToNumber(raffleState.ticketPrice) : 0;
+  $: ticketPriceLamports = raffleState ? bnToNumber(raffleState.ticketPrice) : 0;
   $: ticketPriceSol = ticketPriceLamports / LAMPORTS_PER_SOL;
-  $: endTimeUnix = raffleState ? safeToNumber(raffleState.endTime) : null;
+  $: endTimeUnix = raffleState ? bnToNumber(raffleState.endTime) : null;
   $: ended = endTimeUnix ? Date.now() / 1000 > endTimeUnix : false;
   $: winnerStr =
     raffleState?.winnerIndex !== null && raffleState?.winnerIndex !== undefined

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { navigate } from "../router";
   import { onMount } from "svelte";
-  import { getAllRaffles, type RaffleState } from "../raffleProgram";
+  import { getAllRaffles, type RaffleState, getRaffleStatus, bnToNumber } from "../raffleProgram";
   import type { PublicKey } from "@solana/web3.js";
   import { walletStore } from "../walletStore";
 
@@ -29,43 +29,6 @@
     return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
   }
 
-  function safeToNumber(bn: { toNumber: () => number; toString: () => string }): number {
-    try {
-      return bn.toNumber();
-    } catch {
-      // If toNumber fails, parse as string (for very large numbers)
-      return parseInt(bn.toString(), 10);
-    }
-  }
-
-  function getRaffleStatus(state: RaffleState): string {
-    const now = Date.now() / 1000;
-    const endTime = safeToNumber(state.endTime);
-    const isOver = state.entrants.length >= state.maxTickets || now >= endTime;
-    const winnerDrawn = state.winnerIndex !== null && state.winnerIndex !== undefined;
-
-    if (isOver) {
-      if (winnerDrawn) {
-        if (state.claimed) {
-          return "Claimed";
-        }
-        return "Awaiting Claim";
-      }
-
-      if (state.entrants.length === 0) {
-        return "Entries Closed";
-      }
-
-      if (state.drawWinnerStarted) {
-        return "Drawing...";
-      }
-
-      return "Ready to Draw";
-    }
-
-    return "Active";
-  }
-
   async function loadRaffles(): Promise<void> {
     if (!$walletStore.connected) {
       raffles = [];
@@ -79,7 +42,7 @@
     try {
       raffles = await getAllRaffles();
       // Sort by end time descending (most recent first)
-      raffles.sort((a, b) => safeToNumber(b[1].endTime) - safeToNumber(a[1].endTime));
+      raffles.sort((a, b) => bnToNumber(b[1].endTime) - bnToNumber(a[1].endTime));
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -119,18 +82,15 @@
   {:else}
     <div class="raffle-list">
       {#each raffles as [pda, state]}
+        {@const status = getRaffleStatus(state)}
         <button class="raffle-item" on:click={() => goToRaffle(pda)}>
           <div class="raffle-main">
-            <div
-              class="raffle-status status-{getRaffleStatus(state)
-                .toLowerCase()
-                .replaceAll(' ', '-')}"
-            >
-              {getRaffleStatus(state)}
+            <div class="raffle-status status-{status.cssClass}">
+              {status.display}
             </div>
             <div class="raffle-info">
               <div class="raffle-price">
-                {(safeToNumber(state.ticketPrice) / 1_000_000_000).toFixed(4)} SOL
+                {(bnToNumber(state.ticketPrice) / 1_000_000_000).toFixed(4)} SOL
               </div>
               <div class="raffle-tickets">
                 {state.entrants.length} / {state.maxTickets} tickets
@@ -138,7 +98,7 @@
             </div>
           </div>
           <div class="raffle-details">
-            <div class="raffle-end">Ends: {formatDate(safeToNumber(state.endTime))}</div>
+            <div class="raffle-end">Ends: {formatDate(bnToNumber(state.endTime))}</div>
             <div class="raffle-pda">{pda.toBase58().slice(0, 8)}...{pda.toBase58().slice(-8)}</div>
           </div>
         </button>
