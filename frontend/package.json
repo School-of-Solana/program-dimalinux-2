@@ -9,13 +9,13 @@
     "dev:host": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json",
+    "svcheck": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json",
     "lint": "eslint . --ext .ts,.svelte",
     "lint:fix": "eslint . --ext .ts,.svelte --fix",
     "format": "prettier \"**/*.{js,ts,tsx,jsx,json,css,scss,html,svelte,md}\" --check",
     "format:fix": "prettier \"**/*.{js,ts,tsx,jsx,json,css,scss,html,svelte,md}\" -w",
-    "fix": "yarn lint:fix && yarn format:fix && yarn check",
-    "validate": "yarn check && yarn lint && yarn format"
+    "fix": "yarn lint:fix && yarn format:fix && yarn svcheck",
+    "validate": "yarn svcheck && yarn lint && yarn format"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1"
@@ -40,6 +40,7 @@
     "tslib": "^2.7.0",
     "typescript": "^5.6.2",
     "vite": "^7.1.4",
-    "vite-plugin-node-polyfills": "^0.24.0"
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "yaml": "^2.8.1"
   }
 }

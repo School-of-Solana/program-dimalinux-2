@@ -78,8 +78,7 @@
     actionSig = null;
     busy = true;
     try {
-      const sig = await drawWinner(new PublicKey(pda));
-      actionSig = sig;
+      actionSig = await drawWinner(new PublicKey(pda));
       refreshAfterDelay();
     } catch (e: unknown) {
       actionError = e instanceof Error ? e.message : String(e);
@@ -154,8 +153,6 @@
 </script>
 
 <div class="raffle-page">
-  <h2>Raffle</h2>
-  <div class="pda">PDA: {pda}</div>
   {#if loading}
     <p>Loading...</p>
   {:else if error}
@@ -164,11 +161,16 @@
   {:else if raffleState}
     <table class="raffle-info">
       <tbody>
+        <tr><th>Raffle Address</th><td class="address-cell">{pda}</td></tr>
         <tr><th>Raffle Manager</th><td>{raffleManagerStr}</td></tr>
         <tr><th>Ticket Price</th><td>{ticketPriceSol} SOL</td></tr>
-        <tr><th>Max Tickets</th><td>{maxTickets}</td></tr>
-        <tr><th>Sold</th><td>{ticketsSold}</td></tr>
-        <tr><th>Sold Out</th><td>{soldOut ? "Yes" : "No"}</td></tr>
+        <tr>
+          <th>Sold</th>
+          <td>
+            {ticketsSold} / {maxTickets}
+            {#if soldOut}<span class="sold-out-badge">SOLD OUT</span>{/if}
+          </td>
+        </tr>
         <tr
           ><th>End Time</th><td
             >{endTimeUnix ? new Date(endTimeUnix * 1000).toLocaleString() : "—"}</td
@@ -224,15 +226,6 @@
     max-width: 760px;
     margin: 1rem auto;
   }
-  h2 {
-    margin: 0 0 0.5rem;
-  }
-  .pda {
-    font-size: 0.7rem;
-    word-break: break-all;
-    margin-bottom: 0.5rem;
-    color: #555;
-  }
   .error {
     color: #c62828;
   }
@@ -240,7 +233,6 @@
     font-size: 0.75rem;
   }
 
-  /* Table styling copied from former ViewRaffle */
   table.raffle-info {
     border-collapse: collapse;
     width: 100%;
@@ -258,6 +250,25 @@
   table.raffle-info tr:last-child th,
   table.raffle-info tr:last-child td {
     border-bottom: none;
+  }
+
+  .address-cell {
+    font-size: 0.75rem;
+    word-break: break-all;
+    font-family: monospace;
+    color: #555;
+  }
+
+  .sold-out-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.15rem 0.5rem;
+    background: #ef4444;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 3px;
+    vertical-align: middle;
   }
 
   /* Action bar & controls */

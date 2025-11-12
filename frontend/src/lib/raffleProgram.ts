@@ -24,11 +24,12 @@ function getProvider(): AnchorProvider {
   if (!wallet?.publicKey) {
     throw new Error("Wallet not connected");
   }
-  const provider = new AnchorProvider(
-    connection,
-    get(walletStore),
-    AnchorProvider.defaultOptions()
-  );
+  if (!wallet.signTransaction) {
+    throw new Error("Wallet does not support transaction signing");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+  const provider = new AnchorProvider(connection, wallet as any, AnchorProvider.defaultOptions());
   setProvider(provider);
   return provider;
 }
@@ -65,6 +66,7 @@ export async function createRaffleOnChain(
     .createRaffle(ticketPrice, maxTickets, endTime)
     .accounts({
       raffleOwner: raffleOwner,
+      // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
       raffleState: raffleStatePda,
     })
     .rpc({ commitment: "confirmed" });
@@ -82,6 +84,7 @@ export async function buyTickets(
     .buyTickets(numberOfTickets)
     .accounts({
       buyer,
+      // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
       raffleState: pda,
     })
     .rpc({ commitment: "confirmed" });
@@ -94,6 +97,7 @@ export async function drawWinner(pda: PublicKey): Promise<TransactionSignature> 
     .drawWinner()
     .accounts({
       oraclePayer,
+      // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
       raffleState: pda,
     })
     .rpc({ commitment: "confirmed" });
@@ -116,6 +120,7 @@ export async function claimPrize(pda: PublicKey): Promise<TransactionSignature> 
     .claimPrize()
     .accounts({
       winner,
+      // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
       raffleState: pda,
     })
     .rpc({ commitment: "confirmed" });

@@ -87,10 +87,11 @@
     margin: 0;
     padding: 0;
     border: 0;
+    /* Override browser default popover centering */
+    inset: unset !important;
   }
 
   #connected-wallet-btn {
-    anchor-name: --connected-wallet-btn;
     display: flex;
     align-items: center;
   }
@@ -102,21 +103,33 @@
   }
 
   #connected-wallet-menu {
-    position: absolute;
-    position-anchor: --connected-wallet-btn;
-    right: anchor(right);
-    top: anchor(bottom);
-    inset-area: bottom;
+    position: fixed;
+    top: 60px;
+    right: 10px;
+    left: auto;
+    margin: 0;
+    padding: 0.5rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #1a1a1a;
+    color: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    min-width: 200px;
   }
 
-  #select-wallet-btn {
-    anchor-name: --select-wallet-btn;
-  }
   #select-wallet-modal {
-    position-anchor: --select-wallet-btn;
-    right: anchor(right);
-    bottom: anchor(bottom);
-    inset-area: bottom;
+    position: fixed;
+    top: 60px;
+    right: 10px;
+    left: auto;
+    margin: 0;
+    padding: 0.5rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #1a1a1a;
+    color: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    min-width: 250px;
   }
 
   .wallet-item-btn {
@@ -136,5 +149,23 @@
 
   .wallet-item-btn span {
     flex: 1; /* Make text occupy remaining space */
+  }
+
+  .wallet-item-btn:hover {
+    background: #2a2a2a;
+  }
+
+  .wallet-op-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    background: none;
+    color: white;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .wallet-op-btn:hover {
+    background: #2a2a2a;
   }
 </style>
