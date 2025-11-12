@@ -9,6 +9,10 @@ import {
 } from "./utils/test_utils";
 import { Raffle } from "../target/types/raffle";
 import { RaffleTestHelper, RaffleState } from "./utils/raffle_helper";
+import { assert } from "chai";
+
+// Due to the VRF oracle requirements, the tests must be run on devnet
+// and not a local validator.
 const PROVIDER_URL: string = "https://api.devnet.solana.com";
 
 const opts: ConfirmOptions = {
@@ -19,6 +23,8 @@ const opts: ConfirmOptions = {
 
 describe("raffle", () => {
   const wallet = anchor.AnchorProvider.env().wallet;
+  assert.isDefined(wallet.payer);
+  const walletPayer = wallet.payer;
   const connection = new Connection(PROVIDER_URL);
   const provider = new AnchorProvider(connection, wallet, opts);
   anchor.setProvider(provider);
@@ -34,9 +40,9 @@ describe("raffle", () => {
 
     const pda = raffle.state2Pda(state);
 
-    await raffle.buyTickets(pda, wallet.payer, 1);
+    await raffle.buyTickets(pda, walletPayer, 1);
     await raffle.drawWinner(pda);
-    await raffle.claimPrize(pda, wallet.payer.publicKey);
+    await raffle.claimPrize(pda, walletPayer.publicKey);
     await raffle.close(pda, raffleManager);
     await recoverFunds(provider, raffleManager);
   });
@@ -45,7 +51,7 @@ describe("raffle", () => {
     await assertAnchorError(
       () =>
         raffle.create(
-          provider.wallet.payer,
+          walletPayer,
           solToLamports(0.00001),
           10,
           -10 // delta in past
@@ -56,7 +62,7 @@ describe("raffle", () => {
     await assertAnchorError(
       () =>
         raffle.create(
-          provider.wallet.payer,
+          walletPayer,
           solToLamports(0.00001),
           0, // maxTickets is zero
           120
@@ -67,7 +73,7 @@ describe("raffle", () => {
     await assertAnchorError(
       () =>
         raffle.create(
-          provider.wallet.payer,
+          walletPayer,
           new BN("18446744073709551615"), // u64::MAX
           2,
           120
@@ -77,44 +83,38 @@ describe("raffle", () => {
   });
 
   it("buyTickets negative tests", async () => {
-    const state = await raffle.create(provider.wallet.payer, solToLamports(0.00001), 1, 120);
+    const state = await raffle.create(walletPayer, solToLamports(0.00001), 1, 120);
     const pda = raffle.state2Pda(state);
 
     // Buy 2 tickets when only 1 is available
-    await assertAnchorError(
-      () => raffle.buyTickets(pda, provider.wallet.payer, 2),
-      "InsufficientTickets"
-    );
+    await assertAnchorError(() => raffle.buyTickets(pda, walletPayer, 2), "InsufficientTickets");
 
     // Buy the last ticket to end the raffle
-    await raffle.buyTickets(pda, provider.wallet.payer, 1);
+    await raffle.buyTickets(pda, walletPayer, 1);
 
     // Try to buy another ticket after raffle is full
-    await assertAnchorError(
-      () => raffle.buyTickets(pda, provider.wallet.payer, 1),
-      "RaffleHasEnded"
-    );
+    await assertAnchorError(() => raffle.buyTickets(pda, walletPayer, 1), "RaffleHasEnded");
 
     await raffle.drawWinner(pda);
-    await raffle.claimPrize(pda, wallet.payer.publicKey);
-    await raffle.close(pda, wallet.payer);
+    await raffle.claimPrize(pda, walletPayer.publicKey);
+    await raffle.close(pda, walletPayer);
   });
 
   it("drawWinner negative tests", async () => {
-    const state = await raffle.create(provider.wallet.payer, solToLamports(0.00001), 2, 120);
+    const state = await raffle.create(walletPayer, solToLamports(0.00001), 2, 120);
     const pda = raffle.state2Pda(state);
 
     // Test NoEntrants error
     await assertAnchorError(() => raffle.drawWinner(pda), "NoEntrants");
 
     // Buy 1 ticket, so we bypass the NoEntrants check
-    await raffle.buyTickets(pda, provider.wallet.payer, 1);
+    await raffle.buyTickets(pda, walletPayer, 1);
 
     // Test RaffleNotOver error
     await assertAnchorError(() => raffle.drawWinner(pda), "RaffleNotOver");
 
     // Buy the 2nd ticket to end the raffle
-    await raffle.buyTickets(pda, provider.wallet.payer, 1);
+    await raffle.buyTickets(pda, walletPayer, 1);
 
     // Test ConstraintAddress error with invalid oracle queue
     await assertAnchorError(
@@ -123,10 +123,11 @@ describe("raffle", () => {
           .drawWinner()
           .accounts({
             oraclePayer: provider.wallet.publicKey,
+            // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
             raffleState: pda,
             oracleQueue: PublicKey.unique(), // Invalid oracle queue
           })
-          .signers([provider.wallet.payer])
+          .signers([walletPayer])
           .rpc({ commitment: "confirmed" }),
       "ConstraintAddress",
       "oracle_queue"
@@ -138,16 +139,16 @@ describe("raffle", () => {
     // Test WinnerAlreadyDrawn error
     await assertAnchorError(() => raffle.drawWinner(pda), "WinnerAlreadyDrawn");
 
-    await raffle.claimPrize(pda, wallet.payer.publicKey);
-    await raffle.close(pda, wallet.payer);
+    await raffle.claimPrize(pda, walletPayer.publicKey);
+    await raffle.close(pda, walletPayer);
   });
 
   it("drawWinnerCallback negative tests", async () => {
-    const state = await raffle.create(provider.wallet.payer, solToLamports(0.00001), 1, 120);
+    const state = await raffle.create(walletPayer, solToLamports(0.00001), 1, 120);
     const pda = raffle.state2Pda(state);
 
     // end the raffle
-    await raffle.buyTickets(pda, provider.wallet.payer, 1);
+    await raffle.buyTickets(pda, walletPayer, 1);
 
     await assertAnchorError(() => raffle.drawWinnerCallback(pda), "DrawWinnerNotStarted");
 
@@ -167,8 +168,8 @@ describe("raffle", () => {
     await assertAnchorError(() => raffle.drawWinnerCallback(pda), "CallbackAlreadyInvoked");
 
     // cleanup
-    await raffle.claimPrize(pda, wallet.payer.publicKey);
-    await raffle.close(pda, wallet.payer);
+    await raffle.claimPrize(pda, walletPayer.publicKey);
+    await raffle.close(pda, walletPayer);
   });
 
   it("claimPrize negative tests", async () => {
@@ -176,7 +177,7 @@ describe("raffle", () => {
     const mallory = await createFundedWallet(provider, 0.1);
     const ticketPrice = solToLamports(0.00001);
 
-    const state: RaffleState = await raffle.create(provider.wallet.payer, ticketPrice, 3, 120);
+    const state: RaffleState = await raffle.create(walletPayer, ticketPrice, 3, 120);
 
     const pda = raffle.state2Pda(state);
 
@@ -190,7 +191,7 @@ describe("raffle", () => {
     await assertAnchorError(() => raffle.claimPrize(pda, mallory.publicKey), "NotWinner");
 
     await raffle.claimPrize(pda, alice.publicKey);
-    await raffle.close(pda, provider.wallet.payer);
+    await raffle.close(pda, walletPayer);
     await recoverFunds(provider, alice);
     await recoverFunds(provider, mallory);
   });

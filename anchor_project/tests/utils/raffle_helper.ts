@@ -66,6 +66,7 @@ export class RaffleTestHelper {
       .createRaffle(ticketPrice, maxTickets, endTime)
       .accounts({
         raffleOwner: raffleOwner.publicKey,
+        // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
         raffleState: pda,
       })
       .signers([raffleOwner])
@@ -98,6 +99,7 @@ export class RaffleTestHelper {
       .buyTickets(numTickets)
       .accounts({
         buyer: buyer.publicKey,
+        // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
         raffleState: raffleState,
       })
       .signers([buyer])
@@ -133,6 +135,7 @@ export class RaffleTestHelper {
       .drawWinner()
       .accounts({
         oraclePayer: this.program.provider.publicKey,
+        // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
         raffleState: raffleState,
       })
       .rpc({ commitment: "confirmed" });
@@ -172,6 +175,7 @@ export class RaffleTestHelper {
       .drawWinner()
       .accounts({
         oraclePayer: this.program.provider.publicKey,
+        // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
         raffleState: raffleState,
       })
       .instruction();
@@ -196,6 +200,7 @@ export class RaffleTestHelper {
       .drawWinnerCallback(Array.from(new Uint8Array(32)))
       .accounts({
         vrfProgramIdentity: invalid_vrf_program_identity,
+        // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
         raffleState: raffleState,
       })
       .preInstructions(prepend_ixs)
@@ -278,6 +283,7 @@ export class RaffleTestHelper {
       .claimPrize()
       .accounts({
         winner: winner,
+        // @ts-expect-error - raffleState is in the IDL type, but the linter isn't recognizing it
         raffleState: raffleState,
       })
       .rpc({ commitment: "confirmed" });
