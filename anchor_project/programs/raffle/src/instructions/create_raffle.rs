@@ -8,6 +8,9 @@ use crate::{
     state::{RaffleState, RAFFLE_SEED},
 };
 
+/// Maximum raffle duration in seconds
+pub const THIRTY_DAYS_IN_SECS: i64 = 30 * 24 * 60 * 60;
+
 pub(crate) fn create_raffle_impl(
     ctx: Context<CreateRaffle>,
     ticket_price: u64,
@@ -53,6 +56,8 @@ pub struct CreateRaffle<'info> {
         bump,
         constraint = end_time > clock.unix_timestamp
             @ RaffleError::RaffleEndTimeInPast,
+        constraint = end_time <= clock.unix_timestamp + THIRTY_DAYS_IN_SECS
+            @ RaffleError::RaffleExceeds30Days,
         constraint = max_tickets > 0
             @ RaffleError::MaxTicketsIsZero
     )]

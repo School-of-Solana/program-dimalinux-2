@@ -64,6 +64,17 @@ describe("raffle", () => {
         raffle.create(
           walletPayer,
           solToLamports(0.00001),
+          10,
+          31 * 24 * 60 * 60 // 31 days in future (exceeds 30-day limit)
+        ),
+      "RaffleExceeds30Days"
+    );
+
+    await assertAnchorError(
+      () =>
+        raffle.create(
+          walletPayer,
+          solToLamports(0.00001),
           0, // maxTickets is zero
           120
         ),

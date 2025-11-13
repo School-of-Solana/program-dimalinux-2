@@ -27,6 +27,13 @@
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
+  // Calculate max date (30 days from now)
+  const maxDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return formatDateLocal(d);
+  })();
+
   onMount(() => {
     const now = new Date();
     const oneWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -37,6 +44,16 @@
       expirationTime = formatTimeLocal(oneWeek);
     }
   });
+
+  // Check if selected time is beyond 30 days
+  $: endTimeTooFar = (() => {
+    if (!expirationEpoch) {
+      return false;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
+    return expirationEpoch > now + thirtyDaysInSeconds;
+  })();
 
   function parseDateTimeToEpoch(
     dateStr: string,
@@ -150,6 +167,17 @@
     raffleExplorerUrl = null;
     raffleError = null;
     createdRafflePda = null;
+
+    // Validate raffle end time is within 30 days
+    const now = Math.floor(Date.now() / 1000);
+    const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
+    const maxEndTime = now + thirtyDaysInSeconds;
+
+    if (expirationEpoch && expirationEpoch > maxEndTime) {
+      raffleError = "Raffle end time cannot be more than 30 days from now (RaffleExceeds30Days)";
+      return;
+    }
+
     try {
       const [signature, rafflePda]: [TransactionSignature, PublicKey] = await createRaffleOnChain(
         new BN(ticketPriceLamports),
@@ -223,6 +251,7 @@
         <input
           id="expirationDate"
           type="date"
+          max={maxDate}
           bind:value={expirationDate}
           aria-label="Expiration date"
         />
@@ -245,6 +274,9 @@
           ></span
         >
       </div>
+      {#if endTimeTooFar}
+        <div class="date-warning">⚠️ End time cannot be more than 30 days from now</div>
+      {/if}
     {/if}
   </fieldset>
   <div>
@@ -448,6 +480,16 @@
 
   .wallet-warning {
     color: #fbbf24;
+  }
+
+  .date-warning {
+    color: #fbbf24;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 4px;
+    font-size: 0.85rem;
   }
 
   .tx-result {

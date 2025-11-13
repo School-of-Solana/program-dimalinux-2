@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 pub enum RaffleError {
     // create_raffle errors
     RaffleEndTimeInPast,
+    RaffleExceeds30Days,
     MaxTicketsIsZero,
     RaffleTooLarge,
 
