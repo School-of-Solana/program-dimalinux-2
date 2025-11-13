@@ -9,9 +9,11 @@
     bnToNumber,
     type RaffleState,
   } from "../raffleProgram";
+  import { getRaffleStatus, RaffleStatus } from "../raffleStatus";
   import { walletStore } from "../walletStore";
   import { PublicKey } from "@solana/web3.js";
   import { navigate } from "../router";
+  import ExplorerLink from "../components/ExplorerLink.svelte";
 
   export let pda: string; // raffle PDA
 
@@ -151,27 +153,56 @@
     <p class="error">Error: {error}</p>
     <button on:click={load}>Retry</button>
   {:else if raffleState}
-    <table class="raffle-info">
-      <tbody>
-        <tr><th>Raffle Address</th><td class="address-cell">{pda}</td></tr>
-        <tr><th>Raffle Manager</th><td>{raffleManagerStr}</td></tr>
-        <tr><th>Ticket Price</th><td>{ticketPriceSol} SOL</td></tr>
-        <tr>
-          <th>Sold</th>
-          <td>
-            {ticketsSold} / {maxTickets}
-            {#if soldOut}<span class="sold-out-badge">SOLD OUT</span>{/if}
-          </td>
-        </tr>
-        <tr
-          ><th>End Time</th><td
-            >{endTimeUnix ? new Date(endTimeUnix * 1000).toLocaleString() : "—"}</td
-          ></tr
-        >
-        <tr><th>Winner</th><td>{winnerStr ?? "—"}</td></tr>
-        {#if winnerDrawn}<tr><th>Claimed</th><td>{claimed ? "Yes" : "No"}</td></tr>{/if}
-      </tbody>
-    </table>
+    <div class="raffle-info-grid">
+      <div class="info-card">
+        <div class="info-label">Raffle Address</div>
+        <div class="info-value"><ExplorerLink address={new PublicKey(pda)} /></div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-label">Raffle Manager</div>
+        <div class="info-value"><ExplorerLink address={raffleState.raffleManager} /></div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-label">Ticket Price</div>
+        <div class="info-value highlight">{ticketPriceSol} SOL</div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-label">Tickets Sold</div>
+        <div class="info-value">
+          <span class="ticket-count">{ticketsSold} / {maxTickets}</span>
+          {#if soldOut}<span class="sold-out-badge">SOLD OUT</span>{/if}
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-label">End Time</div>
+        <div class="info-value">
+          {endTimeUnix ? new Date(endTimeUnix * 1000).toLocaleString() : "—"}
+        </div>
+      </div>
+
+      {#if raffleState}
+        {@const status = getRaffleStatus(raffleState)}
+        {#if status !== RaffleStatus.Active && status !== RaffleStatus.EntriesClosed}
+          <div class="info-card winner-card">
+            <div class="info-label">Winner</div>
+            <div class="info-value">
+              {#if winnerStr && raffleState.winnerIndex !== null && raffleState.winnerIndex !== undefined}
+                <ExplorerLink address={raffleState.entrants[raffleState.winnerIndex]} />
+              {:else}
+                —
+              {/if}
+            </div>
+            <div class="winner-status">
+              <span class="status-badge status-{status.cssClass}">{status.display}</span>
+            </div>
+          </div>
+        {/if}
+      {/if}
+    </div>
 
     <div class="action-bar">
       {#if canBuy}
@@ -194,21 +225,17 @@
       <button class="refresh-btn" on:click={load} disabled={busy}>Refresh</button>
     </div>
 
-    {#if buySig}<div class="tx-line">
-        Buy Tx: <a
-          target="_blank"
-          rel="noopener"
-          href={`https://explorer.solana.com/tx/${buySig}?cluster=devnet`}>{buySig}</a
-        >
-      </div>{/if}
+    {#if buySig}
+      <div class="tx-line">
+        Buy Tx: <ExplorerLink address={buySig} short />
+      </div>
+    {/if}
     {#if buyError}<div class="error small">{buyError}</div>{/if}
-    {#if actionSig}<div class="tx-line">
-        Action Tx: <a
-          target="_blank"
-          rel="noopener"
-          href={`https://explorer.solana.com/tx/${actionSig}?cluster=devnet`}>{actionSig}</a
-        >
-      </div>{/if}
+    {#if actionSig}
+      <div class="tx-line">
+        Action Tx: <ExplorerLink address={actionSig} short />
+      </div>
+    {/if}
     {#if actionError}<div class="error small">{actionError}</div>{/if}
   {/if}
 </div>
@@ -225,30 +252,83 @@
     font-size: 0.75rem;
   }
 
-  table.raffle-info {
-    border-collapse: collapse;
-    width: 100%;
-    margin-top: 0.5rem;
-    margin-bottom: 1rem;
-  }
-  table.raffle-info th,
-  table.raffle-info td {
-    text-align: left;
-    padding: 0.35rem 0.5rem;
-    border-bottom: 1px solid #eee;
-    font-weight: normal;
-    background: transparent;
-  }
-  table.raffle-info tr:last-child th,
-  table.raffle-info tr:last-child td {
-    border-bottom: none;
+  .raffle-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
   }
 
-  .address-cell {
+  .info-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(53, 255, 242, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+  }
+
+  .info-label {
     font-size: 0.75rem;
-    word-break: break-all;
-    font-family: monospace;
-    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+  }
+
+  .info-value {
+    font-size: 0.95rem;
+    color: #e2e8f0;
+    word-break: break-word;
+  }
+
+  .info-value.highlight {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #35fff2;
+  }
+
+  .ticket-count {
+    font-weight: 500;
+  }
+
+  .winner-card {
+    position: relative;
+  }
+
+  .winner-status {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(53, 255, 242, 0.15);
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-badge.status-ready-to-draw {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+  }
+
+  .status-badge.status-drawing {
+    background: rgba(139, 92, 246, 0.2);
+    color: #8b5cf6;
+  }
+
+  .status-badge.status-awaiting-claim {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+  }
+
+  .status-badge.status-claimed {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
   }
 
   .sold-out-badge {
@@ -293,14 +373,5 @@
 
   .tx-line {
     font-size: 0.7rem;
-    word-break: break-all;
-    margin: 0.25rem 0;
-  }
-  a {
-    color: #1565c0;
-    text-decoration: none;
-  }
-  a:hover {
-    text-decoration: underline;
   }
 </style>

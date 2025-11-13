@@ -1,4 +1,10 @@
-import { Connection, PublicKey, type TransactionSignature, clusterApiUrl } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  type TransactionSignature,
+  clusterApiUrl,
+  type Cluster,
+} from "@solana/web3.js";
 import { Program, AnchorProvider, utils, BN, setProvider, type Idl } from "@coral-xyz/anchor";
 import idl from "../idl/raffle.json";
 import type { Raffle } from "../idl/types/raffle";
@@ -6,7 +12,9 @@ import { walletStore } from "./walletStore";
 import { get } from "svelte/store";
 new PublicKey(idl.address);
 
-const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+const CLUSTER: Cluster = "devnet";
+
+const connection = new Connection(clusterApiUrl(CLUSTER), "confirmed");
 
 export interface RaffleState {
   raffleManager: PublicKey;
@@ -177,53 +185,29 @@ export function bnToNumber(bn: BN): number {
 }
 
 /**
- * Contains both the display text and CSS class for a raffle status.
+ * Generates a Solana explorer URL for a transaction or address.
+ * @param addressOrSignature - The address or transaction signature
+ * @returns The block explorer URL
  */
-export interface StatusInfo {
-  /** Human-readable display text */
-  readonly display: string;
-  /** CSS-class-friendly identifier */
-  readonly cssClass: string;
+export function explorerURL(addressOrSignature: PublicKey | TransactionSignature): string {
+  const baseUrl = "https://orb.helius.dev";
+
+  // Auto-detect: string = signature, PublicKey object = address
+  const isSig = typeof addressOrSignature === "string";
+  const route = isSig ? "tx" : "address";
+  const value =
+    typeof addressOrSignature === "string" ? addressOrSignature : addressOrSignature.toBase58();
+
+  return `${baseUrl}/${route}/${value}?cluster=${CLUSTER}`;
 }
 
-/**
- * Represents the various states a raffle can be in.
- * Each status contains both display text and a CSS class name.
- */
-export const RaffleStatus = {
-  Active: { display: "Active", cssClass: "active" } as StatusInfo,
-  ReadyToDraw: { display: "Ready to Draw", cssClass: "ready-to-draw" } as StatusInfo,
-  Drawing: { display: "Drawing...", cssClass: "drawing" } as StatusInfo,
-  AwaitingClaim: { display: "Awaiting Claim", cssClass: "awaiting-claim" } as StatusInfo,
-  Claimed: { display: "Claimed", cssClass: "claimed" } as StatusInfo,
-  EntriesClosed: { display: "Entries Closed", cssClass: "entries-closed" } as StatusInfo,
-} as const;
-
-/**
- * Determines the current status of a raffle based on its state.
- * @param state - The raffle state from the blockchain
- * @returns StatusInfo containing display text and CSS class
- */
-export function getRaffleStatus(state: RaffleState): StatusInfo {
-  const now = Date.now() / 1000;
-  const endTime = bnToNumber(state.endTime);
-  const isOver = state.entrants.length >= state.maxTickets || now >= endTime;
-
-  if (!isOver) {
-    return RaffleStatus.Active;
+export function addressToString(
+  address: PublicKey | TransactionSignature,
+  short: boolean = false
+): string {
+  let str = typeof address === "string" ? address : address.toBase58();
+  if (short && str.length > 10) {
+    str = str.slice(0, 4) + "..." + str.slice(-4);
   }
-
-  // Raffle is over - check final states
-  const winnerDrawn = state.winnerIndex !== null && state.winnerIndex !== undefined;
-
-  if (winnerDrawn) {
-    return state.claimed ? RaffleStatus.Claimed : RaffleStatus.AwaitingClaim;
-  }
-
-  // Raffle is over, but there are no contestants
-  if (state.entrants.length === 0) {
-    return RaffleStatus.EntriesClosed;
-  }
-
-  return state.drawWinnerStarted ? RaffleStatus.Drawing : RaffleStatus.ReadyToDraw;
+  return str;
 }

@@ -45,6 +45,17 @@
     margin: 0 auto;
     padding: 1rem 1.25rem 3rem;
   }
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #35fff2 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0.5rem 0 1rem;
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 30px rgba(53, 255, 242, 0.2);
+  }
   .top-bar {
     display: flex;
     align-items: center;

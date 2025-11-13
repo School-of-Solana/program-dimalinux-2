@@ -1,9 +1,11 @@
 <script lang="ts">
   import { navigate } from "../router";
   import { onMount } from "svelte";
-  import { getAllRaffles, type RaffleState, getRaffleStatus, bnToNumber } from "../raffleProgram";
+  import { getAllRaffles, type RaffleState, bnToNumber } from "../raffleProgram";
+  import { getRaffleStatus } from "../raffleStatus";
   import type { PublicKey } from "@solana/web3.js";
   import { walletStore } from "../walletStore";
+  import ExplorerLink from "../components/ExplorerLink.svelte";
 
   let pdaInput = "";
   let raffles: Array<[PublicKey, RaffleState]> = [];
@@ -99,7 +101,7 @@
           </div>
           <div class="raffle-details">
             <div class="raffle-end">Ends: {formatDate(bnToNumber(state.endTime))}</div>
-            <div class="raffle-pda">{pda.toBase58().slice(0, 8)}...{pda.toBase58().slice(-8)}</div>
+            <div class="raffle-pda"><ExplorerLink address={pda} short /></div>
           </div>
         </button>
       {/each}

@@ -8,7 +8,7 @@
 
   const { LAMPORTS_PER_SOL } = web3;
 
-  let maxTickets: number = 100;
+  let maxTickets: number = 50;
   let ticketPrice: number = 0.05;
   let expirationDate: string = ""; // yyyy-mm-dd
   let expirationTime: string = ""; // HH:MM (24-hour)
