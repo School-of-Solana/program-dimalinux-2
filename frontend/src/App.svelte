@@ -8,6 +8,8 @@
   import Home from "./lib/pages/Home.svelte";
   import CreateRaffle from "./lib/pages/CreateRaffle.svelte";
   import ViewRaffle from "./lib/pages/ViewRaffle.svelte";
+  import ExplorerLink from "./lib/components/ExplorerLink.svelte";
+  import { PROGRAM_ID } from "./lib/raffleProgram";
 
   const localStorageKey = "walletAdapter";
   const walletAdapters = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
@@ -18,10 +20,6 @@
 <main>
   <h1>Solana Raffle</h1>
   <div class="top-bar">
-    <div class="left-nav">
-      <a href="#/" class:active={$currentRoute.segments.length === 0}>Home</a>
-      <a href="#/create" class:active={$currentRoute.segments[0] === "create"}>Create</a>
-    </div>
     <WalletProvider {localStorageKey} wallets={walletAdapters} autoConnect />
     <WalletMultiButton />
   </div>
@@ -37,6 +35,13 @@
       <p>Page not found.</p>
     {/if}
   </div>
+
+  <footer class="app-footer">
+    <div class="footer-content">
+      <span class="footer-label">Program Id:</span>
+      <ExplorerLink address={PROGRAM_ID} />
+    </div>
+  </footer>
 </main>
 
 <style>
@@ -59,34 +64,31 @@
   .top-bar {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 1rem;
-    flex-wrap: wrap;
     margin-bottom: 1rem;
   }
-  .left-nav {
-    display: flex;
-    gap: 0.75rem;
-  }
-  .left-nav a {
-    text-decoration: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    border: 1px solid transparent;
-    transition: all 0.2s;
-    color: #94a3b8;
-  }
-  .left-nav a:hover {
-    border-color: #64748b;
-    color: #cbd5e1;
-  }
-  .left-nav a.active {
-    background: #35fff2;
-    color: #0f172a;
-    border-color: #35fff2;
-    font-weight: 700;
-    box-shadow: 0 0 10px rgba(53, 255, 242, 0.3);
-  }
+
   .page-container {
     margin-top: 1rem;
+  }
+
+  .app-footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(53, 255, 242, 0.15);
+    text-align: center;
+  }
+
+  .footer-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .footer-label {
+    color: #94a3b8;
   }
 </style>

@@ -112,7 +112,10 @@
   // derived
   const LAMPORTS_PER_SOL = 1_000_000_000;
   $: raffleManagerStr = raffleState?.raffleManager ? raffleState.raffleManager.toBase58() : "";
-  $: userKey = $walletStore?.publicKey ? $walletStore.publicKey.toBase58() : null;
+
+  // Reference wallet store directly to avoid race conditions with intermediate variables
+  $: userKey = $walletStore.publicKey ? $walletStore.publicKey.toBase58() : null;
+
   $: isRaffleManager = !!raffleManagerStr && !!userKey && raffleManagerStr === userKey;
   $: ticketPriceLamports = raffleState ? bnToNumber(raffleState.ticketPrice) : 0;
   $: ticketPriceSol = ticketPriceLamports / LAMPORTS_PER_SOL;
@@ -147,6 +150,10 @@
 </script>
 
 <div class="raffle-page">
+  <button class="back-btn" on:click={() => navigate("/")}>
+    <span class="back-arrow">←</span> Back to Raffles
+  </button>
+
   {#if loading}
     <p>Loading...</p>
   {:else if error}
@@ -189,13 +196,11 @@
         {#if status !== RaffleStatus.Active && status !== RaffleStatus.EntriesClosed}
           <div class="info-card winner-card">
             <div class="info-label">Winner</div>
-            <div class="info-value">
-              {#if winnerStr && raffleState.winnerIndex !== null && raffleState.winnerIndex !== undefined}
+            {#if winnerStr && raffleState.winnerIndex !== null && raffleState.winnerIndex !== undefined}
+              <div class="info-value">
                 <ExplorerLink address={raffleState.entrants[raffleState.winnerIndex]} />
-              {:else}
-                —
-              {/if}
-            </div>
+              </div>
+            {/if}
             <div class="winner-status">
               <span class="status-badge status-{status.cssClass}">{status.display}</span>
             </div>
@@ -245,11 +250,42 @@
     max-width: 760px;
     margin: 1rem auto;
   }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(53, 255, 242, 0.3);
+    border-radius: 4px;
+    color: #35fff2;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 1.5rem;
+  }
+
+  .back-btn:hover {
+    background: rgba(53, 255, 242, 0.1);
+    border-color: #35fff2;
+  }
+
+  .back-arrow {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+
   .error {
-    color: #c62828;
+    color: #fca5a5;
   }
   .error.small {
     font-size: 0.75rem;
+    padding: 0.5rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 4px;
+    margin-top: 0.5rem;
   }
 
   .raffle-info-grid {
@@ -260,24 +296,30 @@
   }
 
   .info-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(53, 255, 242, 0.1);
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(53, 255, 242, 0.2);
     border-radius: 8px;
     padding: 0.75rem 1rem;
+    transition: all 0.2s;
+  }
+
+  .info-card:hover {
+    border-color: rgba(53, 255, 242, 0.4);
+    box-shadow: 0 2px 8px rgba(53, 255, 242, 0.1);
   }
 
   .info-label {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #94a3b8;
+    color: #a78bfa;
     margin-bottom: 0.4rem;
     font-weight: 600;
   }
 
   .info-value {
     font-size: 0.95rem;
-    color: #e2e8f0;
+    color: #f1f5f9;
     word-break: break-word;
   }
 
@@ -293,12 +335,11 @@
 
   .winner-card {
     position: relative;
+    border-color: rgba(139, 92, 246, 0.3);
   }
 
   .winner-status {
     margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid rgba(53, 255, 242, 0.15);
   }
 
   .status-badge {
@@ -312,35 +353,42 @@
   }
 
   .status-badge.status-ready-to-draw {
-    background: rgba(245, 158, 11, 0.2);
-    color: #f59e0b;
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
   }
 
   .status-badge.status-drawing {
-    background: rgba(139, 92, 246, 0.2);
-    color: #8b5cf6;
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
   }
 
   .status-badge.status-awaiting-claim {
     background: rgba(59, 130, 246, 0.2);
-    color: #3b82f6;
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
   }
 
   .status-badge.status-claimed {
-    background: rgba(16, 185, 129, 0.2);
-    color: #10b981;
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
   }
 
   .sold-out-badge {
     display: inline-block;
     margin-left: 0.5rem;
-    padding: 0.15rem 0.5rem;
-    background: #ef4444;
-    color: white;
-    font-size: 0.7rem;
+    padding: 0.25rem 0.75rem;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    font-size: 0.8rem;
     font-weight: 600;
-    border-radius: 3px;
-    vertical-align: middle;
+    border-radius: 4px;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    vertical-align: baseline;
   }
 
   /* Action bar & controls */

@@ -10,7 +10,8 @@ import idl from "../idl/raffle.json";
 import type { Raffle } from "../idl/types/raffle";
 import { walletStore } from "./walletStore";
 import { get } from "svelte/store";
-new PublicKey(idl.address);
+
+export const PROGRAM_ID = new PublicKey(idl.address);
 
 const CLUSTER: Cluster = "devnet";
 

@@ -104,15 +104,37 @@
     expirationEpoch = parseDateTimeToEpoch(expirationDate, expirationTime, tzMode);
   }
 
-  function handleMaxTicketsInput(e: Event): void {
+  // Validate max tickets when user leaves the field
+  function handleMaxTicketsBlur(e: Event): void {
     const target = e.target as HTMLInputElement;
     const v = parseInt(target.value || "", 10);
-    maxTickets = Number.isNaN(v) ? 0 : Math.max(1, v);
+    const MAX_U32 = 4_294_967_295; // Solana's u32 maximum
+
+    if (Number.isNaN(v) || v < 1) {
+      maxTickets = 1; // Set to minimum valid value
+    } else if (v > MAX_U32) {
+      maxTickets = MAX_U32; // Cap at maximum valid value
+      // Show a brief message that the value was capped
+      raffleError = `Max tickets capped at ${MAX_U32.toLocaleString()}`;
+      setTimeout(() => {
+        if (raffleError?.includes("capped")) {
+          raffleError = null;
+        }
+      }, 3000);
+    } else {
+      maxTickets = v;
+    }
   }
-  function handleTicketPriceInput(e: Event): void {
+
+  // Validate ticket price when user leaves the field
+  function handleTicketPriceBlur(e: Event): void {
     const target = e.target as HTMLInputElement;
     const v = parseFloat(target.value || "");
-    ticketPrice = Number.isNaN(v) ? 0 : v;
+    if (Number.isNaN(v) || v <= 0) {
+      ticketPrice = 0.001; // Set to reasonable minimum
+    } else {
+      ticketPrice = v;
+    }
   }
   $: ticketPriceLamports = Math.round(
     (Number.isFinite(ticketPrice) ? ticketPrice : 0) * LAMPORTS_PER_SOL
@@ -147,17 +169,24 @@
 </script>
 
 <div class="create-raffle-form">
-  <h2>Create New Raffle</h2>
+  <div class="page-header">
+    <button class="back-btn" on:click={() => navigate("/")}>
+      <span class="back-arrow">←</span> Back to Raffles
+    </button>
+    <h2>Create New Raffle</h2>
+  </div>
+
   <div class="field-row">
     <label for="maxTickets">Max Tickets:</label>
     <input
       id="maxTickets"
       type="number"
       min="1"
+      max="4294967295"
       step="1"
       inputmode="numeric"
       bind:value={maxTickets}
-      on:input={handleMaxTicketsInput}
+      on:blur={handleMaxTicketsBlur}
       placeholder="Enter max tickets"
     />
   </div>
@@ -169,7 +198,7 @@
       min="0.000000001"
       step="0.000000001"
       bind:value={ticketPrice}
-      on:input={handleTicketPriceInput}
+      on:blur={handleTicketPriceBlur}
       placeholder="Enter price in SOL"
     />
   </div>
@@ -249,12 +278,12 @@
         </div>
       {/if}
       {#if raffleError}
-        <div class="tx-error" style="color: red; margin-top: 0.5rem;">
+        <div class="tx-error">
           {raffleError}
         </div>
       {/if}
     {:else}
-      <span style="color: red;">Connect your wallet to create a raffle.</span>
+      <span class="wallet-warning">Connect your wallet to create a raffle.</span>
     {/if}
   </div>
 </div>
@@ -264,14 +293,50 @@
     max-width: 400px;
     margin: 2rem auto;
     padding: 2rem;
-    border: 1px solid #ccc;
-    border-radius: 8px;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 12px;
     font-family: inherit;
+    background: rgba(30, 41, 59, 0.3);
   }
+
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(53, 255, 242, 0.3);
+    border-radius: 4px;
+    color: #35fff2;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 1rem;
+  }
+
+  .back-btn:hover {
+    background: rgba(53, 255, 242, 0.1);
+    border-color: #35fff2;
+  }
+
+  .back-arrow {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+
   .create-raffle-form h2 {
-    margin: 0 0 1rem 0;
-    font-size: 1.25rem;
+    margin: 0;
+    font-size: 1.5rem;
+    background: linear-gradient(135deg, #35fff2 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
+
   .field-row {
     display: flex;
     align-items: center;
@@ -282,24 +347,40 @@
     width: 140px;
     margin: 0;
     white-space: nowrap;
-    font-weight: normal;
+    font-weight: 500;
     font-size: 1rem;
+    color: #cbd5e1;
   }
   .create-raffle-form .field-row input {
     width: 8rem;
     max-width: 10rem;
-    padding: 0.35rem 0.4rem;
-    box-sizing: border-box;
+    padding: 0.5rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: rgba(15, 23, 42, 0.6);
+    color: #e2e8f0;
+    font-family: inherit;
   }
+
+  .create-raffle-form .field-row input:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+  }
+
   .expiration-row {
     margin-bottom: 1rem;
     text-align: center;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 6px;
+    padding: 1rem;
   }
   .expiration-row legend {
     display: block;
-    margin-bottom: 0.25rem;
-    font-weight: normal;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
     font-size: 1rem;
+    color: #cbd5e1;
   }
   .expiration-controls {
     display: flex;
@@ -316,24 +397,30 @@
   }
   .expiration-controls .control input,
   .expiration-controls .control select {
-    padding: 0.35rem 0.4rem;
+    padding: 0.5rem 0.6rem;
     box-sizing: border-box;
+    border-radius: 4px;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: rgba(15, 23, 42, 0.6);
+    color: #e2e8f0;
   }
   .small-label {
     font-size: 0.9rem;
-    margin-bottom: 0.2rem;
-    font-weight: normal;
+    margin-bottom: 0.3rem;
+    font-weight: 500;
+    color: #cbd5e1;
   }
   .preview {
     display: inline-block;
-    margin-top: 0.4rem;
-    padding: 0.22rem 0.35rem;
-    background: rgba(15, 23, 42, 0.02);
-    color: #35fff2ff;
+    margin-top: 0.6rem;
+    padding: 0.4rem 0.6rem;
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
     border-radius: 4px;
-    border: 1px solid rgba(15, 23, 42, 0.04);
-    font-size: 0.92rem;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    font-size: 0.9rem;
     line-height: 1;
+    font-weight: 500;
   }
   .epoch-line {
     display: inline-flex;
@@ -349,6 +436,20 @@
     padding: 0.7rem 1.25rem;
     font-size: 1rem;
   }
+
+  .tx-error {
+    color: #fca5a5;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 4px;
+  }
+
+  .wallet-warning {
+    color: #fbbf24;
+  }
+
   .tx-result {
     margin-top: 0.75rem;
     font-size: 0.85rem;

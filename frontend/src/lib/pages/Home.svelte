@@ -56,9 +56,25 @@
     void loadRaffles();
   });
 
-  // Reload raffles when wallet connection changes
-  $: if ($walletStore.connected !== undefined) {
-    void loadRaffles();
+  // Reload raffles when wallet connection or account changes
+  // Use a separate tracking variable to ensure the UI updates in sync
+  let prevConnected: boolean | undefined = undefined;
+  let prevPublicKey: string | null = null;
+
+  $: {
+    const currentConnected = $walletStore.connected;
+    const currentPublicKey = $walletStore.publicKey?.toBase58() ?? null;
+
+    // Only reload if the connection state or public key actually changed
+    if (
+      prevConnected !== undefined &&
+      (prevConnected !== currentConnected || prevPublicKey !== currentPublicKey)
+    ) {
+      void loadRaffles();
+    }
+
+    prevConnected = currentConnected;
+    prevPublicKey = currentPublicKey;
   }
 </script>
 
@@ -101,7 +117,7 @@
           </div>
           <div class="raffle-details">
             <div class="raffle-end">Ends: {formatDate(bnToNumber(state.endTime))}</div>
-            <div class="raffle-pda"><ExplorerLink address={pda} short /></div>
+            <div class="raffle-pda">PDA: <ExplorerLink address={pda} short /></div>
           </div>
         </button>
       {/each}
@@ -121,7 +137,7 @@
 
 <style>
   .home {
-    max-width: 640px;
+    max-width: 400px;
     margin: 1rem auto;
     padding: 0 1rem;
   }
@@ -160,15 +176,16 @@
   .wallet-prompt {
     text-align: center;
     padding: 2rem;
-    color: #64748b;
+    color: #cbd5e1;
   }
 
   .error {
-    color: #ef4444;
+    color: #fca5a5;
   }
 
   .empty p {
     margin: 0.5rem 0;
+    color: #94a3b8;
   }
 
   .raffle-list {
@@ -179,10 +196,10 @@
   }
 
   .raffle-item {
-    background: rgba(15, 23, 42, 0.02);
-    border: 1px solid rgba(53, 255, 242, 0.2);
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(53, 255, 242, 0.3);
     border-radius: 8px;
-    padding: 1rem;
+    padding: 0.75rem 1rem;
     cursor: pointer;
     transition: all 0.2s;
     text-align: left;
@@ -190,55 +207,62 @@
   }
 
   .raffle-item:hover {
-    background: rgba(53, 255, 242, 0.05);
-    border-color: rgba(53, 255, 242, 0.4);
+    background: rgba(53, 255, 242, 0.08);
+    border-color: rgba(53, 255, 242, 0.5);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(53, 255, 242, 0.1);
+    box-shadow: 0 4px 16px rgba(53, 255, 242, 0.15);
   }
 
   .raffle-main {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
   }
 
   .raffle-status {
     padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.85rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .status-active {
-    background: #10b981;
-    color: white;
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
 
   .status-ready-to-draw {
-    background: #f59e0b;
-    color: white;
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
   }
 
   .status-drawing {
-    background: #8b5cf6;
-    color: white;
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
   }
 
   .status-awaiting-claim {
-    background: #3b82f6;
-    color: white;
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
   }
 
   .status-claimed {
-    background: #6b7280;
-    color: white;
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.3);
   }
 
   .status-entries-closed {
-    background: #ef4444;
-    color: white;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
   }
 
   .raffle-info {
@@ -254,7 +278,7 @@
   }
 
   .raffle-tickets {
-    color: #64748b;
+    color: #94a3b8;
     font-size: 0.9rem;
   }
 
@@ -263,7 +287,11 @@
     justify-content: space-between;
     align-items: center;
     font-size: 0.85rem;
-    color: #64748b;
+    color: #94a3b8;
+  }
+
+  .raffle-end {
+    color: #cbd5e1;
   }
 
   .raffle-pda {
@@ -274,7 +302,7 @@
   .quick-jump {
     margin-top: 2rem;
     padding-top: 1.5rem;
-    border-top: 1px solid rgba(53, 255, 242, 0.2);
+    border-top: 1px solid rgba(139, 92, 246, 0.3);
   }
 
   .quick-jump details {
@@ -282,7 +310,7 @@
   }
 
   .quick-jump summary {
-    color: #64748b;
+    color: #a78bfa;
     font-size: 0.9rem;
     user-select: none;
     list-style: none;

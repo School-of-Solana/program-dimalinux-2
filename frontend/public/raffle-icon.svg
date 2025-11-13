@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#0f172a" stroke="#35fff2" stroke-width="3"/>
+
+  <!-- Raffle drum/barrel -->
+  <ellipse cx="50" cy="35" rx="25" ry="8" fill="#35fff2" opacity="0.3"/>
+  <rect x="25" y="35" width="50" height="30" fill="#35fff2" opacity="0.2"/>
+  <ellipse cx="50" cy="65" rx="25" ry="8" fill="#35fff2" opacity="0.3"/>
+
+  <!-- Drum lines -->
+  <line x1="30" y1="35" x2="30" y2="65" stroke="#35fff2" stroke-width="1.5"/>
+  <line x1="50" y1="35" x2="50" y2="65" stroke="#35fff2" stroke-width="1.5"/>
+  <line x1="70" y1="35" x2="70" y2="65" stroke="#35fff2" stroke-width="1.5"/>
+
+  <!-- Ticket coming out -->
+  <rect x="55" y="50" width="20" height="12" rx="1" fill="#8b5cf6" stroke="#35fff2" stroke-width="1.5"/>
+  <line x1="60" y1="50" x2="60" y2="62" stroke="#35fff2" stroke-width="1" stroke-dasharray="2,2"/>
+  <line x1="70" y1="50" x2="70" y2="62" stroke="#35fff2" stroke-width="1" stroke-dasharray="2,2"/>
+
+  <!-- Stars/sparkles for luck -->
+  <path d="M 20 20 L 21.5 23 L 25 23.5 L 22.5 26 L 23 29.5 L 20 27.5 L 17 29.5 L 17.5 26 L 15 23.5 L 18.5 23 Z" fill="#35fff2" opacity="0.8"/>
+  <path d="M 80 25 L 81 27 L 83 27.5 L 81.5 29 L 82 31 L 80 30 L 78 31 L 78.5 29 L 77 27.5 L 79 27 Z" fill="#8b5cf6" opacity="0.8"/>
+  <path d="M 75 70 L 76 72 L 78 72.5 L 76.5 74 L 77 76 L 75 75 L 73 76 L 73.5 74 L 72 72.5 L 74 72 Z" fill="#35fff2" opacity="0.6"/>
+</svg>
