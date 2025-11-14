@@ -11,6 +11,10 @@ import { Raffle } from "../../target/types/raffle";
 import { printLogs, vrf_random_u64 } from "./test_utils";
 import { assert } from "chai";
 
+const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
+  "BPFLoaderUpgradeab1e11111111111111111111111"
+);
+
 export interface RaffleState {
   raffleManager: PublicKey;
   ticketPrice: BN;
@@ -301,18 +305,24 @@ export class RaffleTestHelper {
   /**
    * Closes a raffle and returns the rent to the manager.
    * @param raffleState The PDA of the raffle state account.
-   * @param raffleManager The keypair of the raffle manager.
+   * @param signer The keypair signing the close transaction
+   *        (raffle manager or program owner).
    */
-  async close(raffleState: PublicKey, raffleManager: Keypair): Promise<void> {
+  async close(raffleState: PublicKey, signer: Keypair): Promise<void> {
     console.log("closeRaffle starting");
+
+    // Fetch the raffle state to get the raffle manager
+    const state = await this.getState(raffleState);
 
     const sig: TransactionSignature = await this.program.methods
       .closeRaffle()
       .accounts({
-        raffleManager: raffleManager.publicKey,
+        signer: signer.publicKey,
+        // @ts-expect-error - TypeScript doesn't recognize raffleManager in accounts
+        raffleManager: state.raffleManager,
         raffleState: raffleState,
       })
-      .signers([raffleManager])
+      .signers([signer])
       .rpc({ commitment: "confirmed" });
 
     await printLogs("closeRaffle", this.connection, sig);
@@ -345,5 +355,44 @@ export class RaffleTestHelper {
    */
   async getState(pda: PublicKey): Promise<RaffleState> {
     return await this.program.account.raffleState.fetch(pda, "confirmed");
+  }
+
+  /**
+   * Gets the program's upgrade authority (program owner).
+   * @returns The upgrade authority's public key, or null if none is set.
+   * @throws Error if the program data account is not found.
+   */
+  async getProgramUpgradeAuthority(): Promise<PublicKey | null> {
+    // Derive the program data account address
+    const [programDataAddress] = PublicKey.findProgramAddressSync(
+      [this.program.programId.toBuffer()],
+      BPF_LOADER_UPGRADEABLE_PROGRAM_ID
+    );
+
+    // Fetch the program data account
+    const accountInfo = await this.connection.getAccountInfo(programDataAddress);
+    if (!accountInfo) {
+      throw new Error(
+        `Program data account not found at ${programDataAddress.toBase58()}. ` +
+          `Is the program deployed as an upgradeable program?`
+      );
+    }
+
+    // Parse the UpgradeableLoaderState
+    // The upgrade authority is at bytes 13-45 (after the discriminator and slot)
+    // Format: 4 bytes discriminator + 8 bytes slot + 1 byte option + 32 bytes pubkey
+    const UPGRADE_AUTHORITY_OFFSET = 13;
+
+    // Check if upgrade authority is present (option byte is 1)
+    if (accountInfo.data[12] === 0) {
+      return null; // No upgrade authority set
+    }
+
+    const authorityBytes = accountInfo.data.slice(
+      UPGRADE_AUTHORITY_OFFSET,
+      UPGRADE_AUTHORITY_OFFSET + 32
+    );
+
+    return new PublicKey(authorityBytes);
   }
 }

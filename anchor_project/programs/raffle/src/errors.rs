@@ -28,6 +28,6 @@ pub enum RaffleError {
     PrizeAlreadyClaimed,
 
     // close_raffle errors
-    OnlyRaffleManagerCanClose,
+    OnlyRaffleManagerOrProgramOwnerCanClose,
     CanNotCloseActiveRaffle,
 }

@@ -15,6 +15,10 @@ export const PROGRAM_ID = new PublicKey(idl.address);
 
 const CLUSTER: Cluster = "devnet";
 
+const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
+  "BPFLoaderUpgradeab1e11111111111111111111111"
+);
+
 const connection = new Connection(clusterApiUrl(CLUSTER), "confirmed");
 
 export interface RaffleState {
@@ -43,12 +47,22 @@ function getProvider(): AnchorProvider {
   return provider;
 }
 
+/**
+ * Gets the Raffle Anchor program instance using the current wallet provider.
+ * @returns The Raffle program instance
+ * @throws Error if wallet is not connected or doesn't support signing
+ */
 export function getRaffleProgram(): Program<Raffle> {
   // We only support Anchor >= 0.31.1. Some older versions pass
   // the program ID below.
   return new Program<Raffle>(idl as Idl, getProvider());
 }
 
+/**
+ * Fetches the raffle state account data for a given PDA.
+ * @param pda - The public key of the raffle state account
+ * @returns The raffle state data
+ */
 export async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
   const program = getRaffleProgram();
   return (await program.account.raffleState.fetch(pda, "confirmed")) as RaffleState;
@@ -83,6 +97,12 @@ export async function createRaffleOnChain(
   return [signature, raffleStatePda];
 }
 
+/**
+ * Buys tickets for a raffle using the connected wallet.
+ * @param pda - The public key of the raffle state account
+ * @param numberOfTickets - Number of tickets to purchase
+ * @returns Transaction signature
+ */
 export async function buyTickets(
   pda: PublicKey,
   numberOfTickets: number
@@ -99,6 +119,12 @@ export async function buyTickets(
     .rpc({ commitment: "confirmed" });
 }
 
+/**
+ * Initiates the VRF request to draw a winner for a raffle.
+ * The connected wallet pays for the VRF request.
+ * @param pda - The public key of the raffle state account
+ * @returns Transaction signature
+ */
 export async function drawWinner(pda: PublicKey): Promise<TransactionSignature> {
   const program = getRaffleProgram();
   const oraclePayer = program.provider.publicKey!;
@@ -112,6 +138,13 @@ export async function drawWinner(pda: PublicKey): Promise<TransactionSignature> 
     .rpc({ commitment: "confirmed" });
 }
 
+/**
+ * Claims the prize for a raffle. Can be called by anyone after the winner has been drawn.
+ * The prize is always sent to the correct winner as determined by the VRF.
+ * @param pda - The public key of the raffle state account
+ * @returns Transaction signature
+ * @throws Error if winner has not been drawn or raffle state is corrupted
+ */
 export async function claimPrize(pda: PublicKey): Promise<TransactionSignature> {
   const program = getRaffleProgram();
 
@@ -135,18 +168,35 @@ export async function claimPrize(pda: PublicKey): Promise<TransactionSignature> 
     .rpc({ commitment: "confirmed" });
 }
 
+/**
+ * Closes a raffle and returns the remaining rent/lamports to the raffle manager.
+ * Can be called by either the raffle manager or the program upgrade authority.
+ * Only possible if no tickets were sold or the prize has already been claimed.
+ * @param pda - The public key of the raffle state account
+ * @returns Transaction signature
+ */
 export async function closeRaffle(pda: PublicKey): Promise<TransactionSignature> {
   const program = getRaffleProgram();
-  const raffleManager = program.provider.publicKey!;
+  const raffleState = await getRaffleState(pda);
+
   return await program.methods
     .closeRaffle()
     .accounts({
-      raffleManager,
+      signer: program.provider.publicKey!,
+      // @ts-expect-error - raffleManager and signer are in the IDL type, but the linter isn't recognizing them
+      raffleManager: raffleState.raffleManager,
       raffleState: pda,
     })
     .rpc({ commitment: "confirmed" });
 }
 
+/**
+ * Derives the PDA (Program Derived Address) for a raffle state account.
+ * @param raffleOwner - The public key of the raffle owner/manager
+ * @param endTime - The raffle end time as a BN (epoch seconds)
+ * @param programID - The raffle program ID
+ * @returns A tuple of [PDA PublicKey, bump seed]
+ */
 export function getRaffleStateAddress(
   raffleOwner: PublicKey,
   endTime: BN,
@@ -174,6 +224,11 @@ export async function getAllRaffles(): Promise<Array<[PublicKey, RaffleState]>> 
   return accounts.map((account) => [account.publicKey, account.account as RaffleState]);
 }
 
+/**
+ * Converts an Anchor BN (BigNumber) to a JavaScript number.
+ * @param bn - The BN value to convert
+ * @returns The numeric value
+ */
 export function bnToNumber(bn: BN): number {
   try {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return
@@ -183,6 +238,45 @@ export function bnToNumber(bn: BN): number {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
     return parseInt(bn.toString(), 10);
   }
+}
+
+/**
+ * Gets the program's upgrade authority (program owner).
+ * @returns The upgrade authority's public key, or null if none is set.
+ * @throws Error if the program data account is not found.
+ */
+export async function getProgramUpgradeAuthority(): Promise<PublicKey | null> {
+  // Derive the program data account address
+  const [programDataAddress] = PublicKey.findProgramAddressSync(
+    [PROGRAM_ID.toBuffer()],
+    BPF_LOADER_UPGRADEABLE_PROGRAM_ID
+  );
+
+  // Fetch the program data account
+  const accountInfo = await connection.getAccountInfo(programDataAddress);
+  if (!accountInfo) {
+    throw new Error(
+      `Program data account not found at ${programDataAddress.toBase58()}. ` +
+        `Is the program deployed as an upgradeable program?`
+    );
+  }
+
+  // Parse the UpgradeableLoaderState
+  // The upgrade authority is at bytes 13-45 (after the discriminator and slot)
+  // Format: 4 bytes discriminator + 8 bytes slot + 1 byte option + 32 bytes pubkey
+  const UPGRADE_AUTHORITY_OFFSET = 13;
+
+  // Check if upgrade authority is present (option byte is 1)
+  if (accountInfo.data[12] === 0) {
+    return null; // No upgrade authority set
+  }
+
+  const authorityBytes = accountInfo.data.slice(
+    UPGRADE_AUTHORITY_OFFSET,
+    UPGRADE_AUTHORITY_OFFSET + 32
+  );
+
+  return new PublicKey(authorityBytes);
 }
 
 /**
@@ -202,6 +296,12 @@ export function explorerURL(addressOrSignature: PublicKey | TransactionSignature
   return `${baseUrl}/${route}/${value}?cluster=${CLUSTER}`;
 }
 
+/**
+ * Converts a PublicKey or transaction signature to a base58 string.
+ * @param address - The PublicKey or transaction signature to convert
+ * @param short - If true, returns abbreviated format (first 4 + last 4 chars)
+ * @returns The base58 string representation, optionally abbreviated
+ */
 export function addressToString(
   address: PublicKey | TransactionSignature,
   short: boolean = false

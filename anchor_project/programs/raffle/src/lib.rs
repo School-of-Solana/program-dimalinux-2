@@ -123,7 +123,8 @@ pub mod raffle {
     }
 
     /// Closes the raffle state account and returns the remaining rent/lamports
-    /// to the raffle manager. Only possible if no tickets were sold or the
+    /// to the raffle manager. Can be called by either the raffle manager or the
+    /// program upgrade authority. Only possible if no tickets were sold or the
     /// prize has already been claimed.
     ///
     /// Emits: none
@@ -131,8 +132,8 @@ pub mod raffle {
     /// Accounts: see [`CloseRaffle`] for required accounts and seeds.
     ///
     /// Errors:
-    /// - `RaffleError::OnlyRaffleManagerCanClose`: caller is not the
-    ///   `raffle_manager`.
+    /// - `RaffleError::OnlyRaffleManagerOrProgramOwnerCanClose`: caller is neither
+    ///   the raffle manager nor the program upgrade authority.
     /// - `RaffleError::CanNotCloseActiveRaffle`: tickets were sold and the prize
     ///   has not yet been claimed.
     pub fn close_raffle(ctx: Context<CloseRaffle>) -> Result<()> {

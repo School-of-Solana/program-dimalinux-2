@@ -8,6 +8,7 @@
     getRaffleState,
     bnToNumber,
     type RaffleState,
+    getProgramUpgradeAuthority,
   } from "../raffleProgram";
   import { getRaffleStatus, RaffleStatus } from "../raffleStatus";
   import { walletStore } from "../walletStore";
@@ -26,6 +27,7 @@
   let actionSig: string | null = null;
   let busy = false;
   let qty = 1;
+  let programUpgradeAuthority: PublicKey | null = null;
 
   async function load(): Promise<void> {
     loading = true;
@@ -36,6 +38,7 @@
     actionSig = null;
     try {
       raffleState = await getRaffleState(new PublicKey(pda));
+      programUpgradeAuthority = await getProgramUpgradeAuthority();
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -117,6 +120,10 @@
   $: userKey = $walletStore.publicKey ? $walletStore.publicKey.toBase58() : null;
 
   $: isRaffleManager = !!raffleManagerStr && !!userKey && raffleManagerStr === userKey;
+  $: isProgramOwner =
+    !!programUpgradeAuthority &&
+    !!$walletStore.publicKey &&
+    programUpgradeAuthority.equals($walletStore.publicKey);
   $: ticketPriceLamports = raffleState ? bnToNumber(raffleState.ticketPrice) : 0;
   $: ticketPriceSol = ticketPriceLamports / LAMPORTS_PER_SOL;
   $: endTimeUnix = raffleState ? bnToNumber(raffleState.endTime) : null;
@@ -136,7 +143,7 @@
   $: canDraw = !winnerDrawn && (ended || soldOut) && ticketsSold > 0;
   $: canClaim = $walletStore.connected && winnerDrawn && !claimed;
   $: isClaimingForSelf = userIsWinner;
-  $: canClose = isRaffleManager && (claimed || ticketsSold === 0);
+  $: canClose = (isRaffleManager || isProgramOwner) && (claimed || ticketsSold === 0);
   $: totalSol = qty * ticketPriceSol;
 
   function clampQty(): void {

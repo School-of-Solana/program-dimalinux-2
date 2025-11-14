@@ -35,16 +35,32 @@ describe("raffle", () => {
 
   it("Full Raffle Success", async () => {
     const raffleManager = await createFundedWallet(provider, 0.5);
+    const alice = await createFundedWallet(provider, 0.1);
+    const bob = await createFundedWallet(provider, 0.1);
     const ticketPrice = solToLamports(0.00001);
-    const state: RaffleState = await raffle.create(raffleManager, ticketPrice, 1, 120);
+    const state: RaffleState = await raffle.create(raffleManager, ticketPrice, 5, 120);
 
     const pda = raffle.state2Pda(state);
 
-    await raffle.buyTickets(pda, walletPayer, 1);
+    // Alice buys 2 tickets
+    await raffle.buyTickets(pda, alice, 2);
+
+    // Bob buys 3 tickets
+    await raffle.buyTickets(pda, bob, 3);
+
     await raffle.drawWinner(pda);
-    await raffle.claimPrize(pda, walletPayer.publicKey);
+
+    // Get the winner to claim the prize
+    const raffleStateAfterDraw = await raffle.getState(pda);
+    assert.isNotNull(raffleStateAfterDraw.winnerIndex);
+    const winnerPubkey = raffleStateAfterDraw.entrants[raffleStateAfterDraw.winnerIndex];
+
+    await raffle.claimPrize(pda, winnerPubkey);
     await raffle.close(pda, raffleManager);
+
     await recoverFunds(provider, raffleManager);
+    await recoverFunds(provider, alice);
+    await recoverFunds(provider, bob);
   });
 
   it("createRaffle negative tests", async () => {
@@ -215,7 +231,10 @@ describe("raffle", () => {
 
     const pda = raffle.state2Pda(state);
 
-    await assertAnchorError(() => raffle.close(pda, notManager), "OnlyRaffleManagerCanClose");
+    await assertAnchorError(
+      () => raffle.close(pda, notManager),
+      "OnlyRaffleManagerOrProgramOwnerCanClose"
+    );
 
     await raffle.buyTickets(pda, notManager, 1);
 
@@ -228,5 +247,44 @@ describe("raffle", () => {
     await raffle.close(pda, manager);
     await recoverFunds(provider, manager);
     await recoverFunds(provider, notManager);
+  });
+
+  it("closeRaffle by program owner", async () => {
+    const upgradeAuthority = await raffle.getProgramUpgradeAuthority();
+
+    // Only run this test if the wallet provider is the upgrade authority
+    if (!upgradeAuthority?.equals(walletPayer.publicKey)) {
+      console.log("Skipping: Wallet is not the program upgrade authority");
+      return;
+    }
+
+    console.log("Running: Wallet is the program upgrade authority");
+    const upgradeAuthorityKeypair = walletPayer;
+
+    const raffleManager = await createFundedWallet(provider, 0.1);
+    console.log(`Raffle manager created: ${raffleManager.publicKey.toBase58()}`);
+
+    const state: RaffleState = await raffle.create(raffleManager, solToLamports(0.00001), 2, 120);
+    const pda = raffle.state2Pda(state);
+
+    const balanceBefore = await connection.getBalance(raffleManager.publicKey, "confirmed");
+
+    // Close the raffle with the program owner (before any tickets are sold)
+    // Rent refund should still go to raffleManager
+    await raffle.close(pda, upgradeAuthorityKeypair);
+
+    const balanceAfter = await connection.getBalance(raffleManager.publicKey, "confirmed");
+    console.log(
+      `Rent refund: ${balanceAfter} - ${balanceBefore} = ${balanceAfter - balanceBefore} lamports`
+    );
+
+    // Verify the raffle manager's received the rent refund and not the program owner
+    assert.isAbove(balanceAfter, balanceBefore);
+
+    // Verify the raffle account was closed
+    const closedAccount = await program.account.raffleState.fetchNullable(pda);
+    assert.isNull(closedAccount);
+
+    await recoverFunds(provider, raffleManager);
   });
 });

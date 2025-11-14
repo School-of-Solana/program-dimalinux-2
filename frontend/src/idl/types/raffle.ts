@@ -184,7 +184,8 @@ export type Raffle = {
       "name": "closeRaffle",
       "docs": [
         "Closes the raffle state account and returns the remaining rent/lamports",
-        "to the raffle manager. Only possible if no tickets were sold or the",
+        "to the raffle manager. Can be called by either the raffle manager or the",
+        "program upgrade authority. Only possible if no tickets were sold or the",
         "prize has already been claimed.",
         "",
         "Emits: none",
@@ -192,8 +193,8 @@ export type Raffle = {
         "Accounts: see [`CloseRaffle`] for required accounts and seeds.",
         "",
         "Errors:",
-        "- `RaffleError::OnlyRaffleManagerCanClose`: caller is not the",
-        "`raffle_manager`.",
+        "- `RaffleError::OnlyRaffleManagerOrProgramOwnerCanClose`: caller is neither",
+        "the raffle manager nor the program upgrade authority.",
         "- `RaffleError::CanNotCloseActiveRaffle`: tickets were sold and the prize",
         "has not yet been claimed."
       ],
@@ -209,12 +210,20 @@ export type Raffle = {
       ],
       "accounts": [
         {
-          "name": "raffleManager",
+          "name": "signer",
           "docs": [
-            "Raffle manager; must sign. Receives the rent refund when account closes."
+            "Either the raffle manager or the program upgrade authority; must sign."
           ],
           "writable": true,
-          "signer": true,
+          "signer": true
+        },
+        {
+          "name": "raffleManager",
+          "docs": [
+            "When signer is the raffle manager, this is the same account.",
+            "When signer is the program owner, this is where rent goes."
+          ],
+          "writable": true,
           "relations": [
             "raffleState"
           ]
@@ -254,6 +263,90 @@ export type Raffle = {
               }
             ]
           }
+        },
+        {
+          "name": "programData",
+          "docs": [
+            "The program data account containing upgrade authority for this program."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  49,
+                  153,
+                  84,
+                  233,
+                  78,
+                  136,
+                  22,
+                  15,
+                  89,
+                  148,
+                  69,
+                  178,
+                  154,
+                  19,
+                  116,
+                  43,
+                  163,
+                  35,
+                  246,
+                  239,
+                  43,
+                  127,
+                  111,
+                  1,
+                  44,
+                  126,
+                  12,
+                  124,
+                  174,
+                  125,
+                  107,
+                  3
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                2,
+                168,
+                246,
+                145,
+                78,
+                136,
+                161,
+                176,
+                226,
+                16,
+                21,
+                62,
+                247,
+                99,
+                174,
+                43,
+                0,
+                194,
+                185,
+                61,
+                22,
+                193,
+                36,
+                210,
+                192,
+                83,
+                122,
+                16,
+                4,
+                128,
+                0,
+                0
+              ]
+            }
+          }
         }
       ],
       "args": []
@@ -274,6 +367,8 @@ export type Raffle = {
         "Errors:",
         "- `RaffleError::RaffleEndTimeInPast`: the provided `end_time` must be in the",
         "future relative to the cluster clock.",
+        "- `RaffleError::RaffleExceeds30Days`: the provided `end_time` cannot be more",
+        "than 30 days from the current time.",
         "- `RaffleError::MaxTicketsIsZero`: `max_tickets` must be at least 1.",
         "- `RaffleError::RaffleTooLarge`: the computed maximum prize pool",
         "(`ticket_price * max_tickets`) overflowed `u64`."
@@ -607,62 +702,66 @@ export type Raffle = {
     },
     {
       "code": 6001,
-      "name": "maxTicketsIsZero"
+      "name": "raffleExceeds30Days"
     },
     {
       "code": 6002,
-      "name": "raffleTooLarge"
+      "name": "maxTicketsIsZero"
     },
     {
       "code": 6003,
-      "name": "raffleHasEnded"
+      "name": "raffleTooLarge"
     },
     {
       "code": 6004,
-      "name": "insufficientTickets"
+      "name": "raffleHasEnded"
     },
     {
       "code": 6005,
-      "name": "winnerAlreadyDrawn"
+      "name": "insufficientTickets"
     },
     {
       "code": 6006,
-      "name": "raffleNotOver"
+      "name": "winnerAlreadyDrawn"
     },
     {
       "code": 6007,
-      "name": "noEntrants"
+      "name": "raffleNotOver"
     },
     {
       "code": 6008,
-      "name": "drawWinnerNotStarted"
+      "name": "noEntrants"
     },
     {
       "code": 6009,
-      "name": "callbackAlreadyInvoked"
+      "name": "drawWinnerNotStarted"
     },
     {
       "code": 6010,
-      "name": "callbackNotInvokedByVrf"
+      "name": "callbackAlreadyInvoked"
     },
     {
       "code": 6011,
-      "name": "winnerNotYetDrawn"
+      "name": "callbackNotInvokedByVrf"
     },
     {
       "code": 6012,
-      "name": "notWinner"
+      "name": "winnerNotYetDrawn"
     },
     {
       "code": 6013,
-      "name": "prizeAlreadyClaimed"
+      "name": "notWinner"
     },
     {
       "code": 6014,
-      "name": "onlyRaffleManagerCanClose"
+      "name": "prizeAlreadyClaimed"
     },
     {
       "code": 6015,
+      "name": "onlyRaffleManagerOrProgramOwnerCanClose"
+    },
+    {
+      "code": 6016,
       "name": "canNotCloseActiveRaffle"
     }
   ],

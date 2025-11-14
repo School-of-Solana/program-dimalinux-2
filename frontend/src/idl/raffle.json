@@ -178,7 +178,8 @@
       "name": "close_raffle",
       "docs": [
         "Closes the raffle state account and returns the remaining rent/lamports",
-        "to the raffle manager. Only possible if no tickets were sold or the",
+        "to the raffle manager. Can be called by either the raffle manager or the",
+        "program upgrade authority. Only possible if no tickets were sold or the",
         "prize has already been claimed.",
         "",
         "Emits: none",
@@ -186,8 +187,8 @@
         "Accounts: see [`CloseRaffle`] for required accounts and seeds.",
         "",
         "Errors:",
-        "- `RaffleError::OnlyRaffleManagerCanClose`: caller is not the",
-        "`raffle_manager`.",
+        "- `RaffleError::OnlyRaffleManagerOrProgramOwnerCanClose`: caller is neither",
+        "the raffle manager nor the program upgrade authority.",
         "- `RaffleError::CanNotCloseActiveRaffle`: tickets were sold and the prize",
         "has not yet been claimed."
       ],
@@ -203,12 +204,20 @@
       ],
       "accounts": [
         {
-          "name": "raffle_manager",
+          "name": "signer",
           "docs": [
-            "Raffle manager; must sign. Receives the rent refund when account closes."
+            "Either the raffle manager or the program upgrade authority; must sign."
           ],
           "writable": true,
-          "signer": true,
+          "signer": true
+        },
+        {
+          "name": "raffle_manager",
+          "docs": [
+            "When signer is the raffle manager, this is the same account.",
+            "When signer is the program owner, this is where rent goes."
+          ],
+          "writable": true,
           "relations": [
             "raffle_state"
           ]
@@ -248,6 +257,90 @@
               }
             ]
           }
+        },
+        {
+          "name": "program_data",
+          "docs": [
+            "The program data account containing upgrade authority for this program."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  49,
+                  153,
+                  84,
+                  233,
+                  78,
+                  136,
+                  22,
+                  15,
+                  89,
+                  148,
+                  69,
+                  178,
+                  154,
+                  19,
+                  116,
+                  43,
+                  163,
+                  35,
+                  246,
+                  239,
+                  43,
+                  127,
+                  111,
+                  1,
+                  44,
+                  126,
+                  12,
+                  124,
+                  174,
+                  125,
+                  107,
+                  3
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                2,
+                168,
+                246,
+                145,
+                78,
+                136,
+                161,
+                176,
+                226,
+                16,
+                21,
+                62,
+                247,
+                99,
+                174,
+                43,
+                0,
+                194,
+                185,
+                61,
+                22,
+                193,
+                36,
+                210,
+                192,
+                83,
+                122,
+                16,
+                4,
+                128,
+                0,
+                0
+              ]
+            }
+          }
         }
       ],
       "args": []
@@ -268,6 +361,8 @@
         "Errors:",
         "- `RaffleError::RaffleEndTimeInPast`: the provided `end_time` must be in the",
         "future relative to the cluster clock.",
+        "- `RaffleError::RaffleExceeds30Days`: the provided `end_time` cannot be more",
+        "than 30 days from the current time.",
         "- `RaffleError::MaxTicketsIsZero`: `max_tickets` must be at least 1.",
         "- `RaffleError::RaffleTooLarge`: the computed maximum prize pool",
         "(`ticket_price * max_tickets`) overflowed `u64`."
@@ -601,62 +696,66 @@
     },
     {
       "code": 6001,
-      "name": "MaxTicketsIsZero"
+      "name": "RaffleExceeds30Days"
     },
     {
       "code": 6002,
-      "name": "RaffleTooLarge"
+      "name": "MaxTicketsIsZero"
     },
     {
       "code": 6003,
-      "name": "RaffleHasEnded"
+      "name": "RaffleTooLarge"
     },
     {
       "code": 6004,
-      "name": "InsufficientTickets"
+      "name": "RaffleHasEnded"
     },
     {
       "code": 6005,
-      "name": "WinnerAlreadyDrawn"
+      "name": "InsufficientTickets"
     },
     {
       "code": 6006,
-      "name": "RaffleNotOver"
+      "name": "WinnerAlreadyDrawn"
     },
     {
       "code": 6007,
-      "name": "NoEntrants"
+      "name": "RaffleNotOver"
     },
     {
       "code": 6008,
-      "name": "DrawWinnerNotStarted"
+      "name": "NoEntrants"
     },
     {
       "code": 6009,
-      "name": "CallbackAlreadyInvoked"
+      "name": "DrawWinnerNotStarted"
     },
     {
       "code": 6010,
-      "name": "CallbackNotInvokedByVRF"
+      "name": "CallbackAlreadyInvoked"
     },
     {
       "code": 6011,
-      "name": "WinnerNotYetDrawn"
+      "name": "CallbackNotInvokedByVRF"
     },
     {
       "code": 6012,
-      "name": "NotWinner"
+      "name": "WinnerNotYetDrawn"
     },
     {
       "code": 6013,
-      "name": "PrizeAlreadyClaimed"
+      "name": "NotWinner"
     },
     {
       "code": 6014,
-      "name": "OnlyRaffleManagerCanClose"
+      "name": "PrizeAlreadyClaimed"
     },
     {
       "code": 6015,
+      "name": "OnlyRaffleManagerOrProgramOwnerCanClose"
+    },
+    {
+      "code": 6016,
       "name": "CanNotCloseActiveRaffle"
     }
   ],
