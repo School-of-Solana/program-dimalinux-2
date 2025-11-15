@@ -1,6 +1,10 @@
 <script lang="ts">
   import { walletStore } from "../walletStore";
-  import { createRaffleOnChain } from "../raffleProgram";
+  import {
+    createRaffleOnChain,
+    MIN_TICKET_PRICE_LAMPORTS,
+    MIN_TICKET_PRICE_SOL,
+  } from "../raffleProgram";
   import { onMount } from "svelte";
   import { web3, BN } from "@coral-xyz/anchor";
   import type { TransactionSignature, PublicKey } from "@solana/web3.js";
@@ -8,8 +12,11 @@
 
   const { LAMPORTS_PER_SOL } = web3;
 
+  // Ticket price UI constants
+  const DEFAULT_TICKET_PRICE_SOL = 0.05;
+
   let maxTickets: number = 50;
-  let ticketPrice: number = 0.05;
+  let ticketPrice: number = DEFAULT_TICKET_PRICE_SOL;
   let expirationDate: string = ""; // yyyy-mm-dd
   let expirationTime: string = ""; // HH:MM (24-hour)
   let expirationEpoch: number | null = null;
@@ -147,8 +154,9 @@
   function handleTicketPriceBlur(e: Event): void {
     const target = e.target as HTMLInputElement;
     const v = parseFloat(target.value || "");
-    if (Number.isNaN(v) || v <= 0) {
-      ticketPrice = 0.001; // Set to reasonable minimum
+    const MIN_SOL = MIN_TICKET_PRICE_SOL;
+    if (Number.isNaN(v) || v < MIN_SOL) {
+      ticketPrice = MIN_SOL; // Clamp to minimum
     } else {
       ticketPrice = v;
     }
@@ -223,14 +231,18 @@
     <input
       id="ticketPrice"
       type="number"
-      min="0.000000001"
-      step="0.000000001"
+      min={MIN_TICKET_PRICE_SOL}
+      max={Number.MAX_SAFE_INTEGER}
+      step={MIN_TICKET_PRICE_SOL}
       bind:value={ticketPrice}
       on:blur={handleTicketPriceBlur}
       placeholder="Enter price in SOL"
     />
   </div>
   <div class="price-preview preview">{ticketPrice} SOL = {ticketPriceLamports} lamports</div>
+  {#if ticketPriceLamports < MIN_TICKET_PRICE_LAMPORTS}
+    <div class="date-warning">Minimum ticket price is {MIN_TICKET_PRICE_SOL} SOL</div>
+  {/if}
   <fieldset class="expiration-row">
     <legend>Raffle End:</legend>
     <div class="expiration-controls" role="group" aria-label="Expiration controls">
@@ -283,8 +295,10 @@
     {#if $walletStore.connected}
       <button
         on:click={async () => await createRaffleClicked()}
-        disabled={!(maxTickets > 0) || !(ticketPrice > 0) || !expirationDate || !expirationTime}
-        >Create Raffle</button
+        disabled={!(maxTickets > 0) ||
+          ticketPriceLamports < MIN_TICKET_PRICE_LAMPORTS ||
+          !expirationDate ||
+          !expirationTime}>Create Raffle</button
       >
       {#if raffleTxSig && raffleExplorerUrl}
         <div class="tx-result">

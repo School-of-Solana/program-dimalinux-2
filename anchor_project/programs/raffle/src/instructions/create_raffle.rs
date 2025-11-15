@@ -10,6 +10,8 @@ use crate::{
 
 /// Maximum raffle duration in seconds
 pub const THIRTY_DAYS_IN_SECS: i64 = 30 * 24 * 60 * 60;
+/// Minimum allowed ticket price in lamports
+pub const MIN_TICKET_PRICE_LAMPORTS: u64 = 100_000; // 0.0001 SOL
 
 pub(crate) fn create_raffle_impl(
     ctx: Context<CreateRaffle>,
@@ -57,9 +59,11 @@ pub struct CreateRaffle<'info> {
         constraint = end_time > clock.unix_timestamp
             @ RaffleError::RaffleEndTimeInPast,
         constraint = end_time <= clock.unix_timestamp + THIRTY_DAYS_IN_SECS
-            @ RaffleError::RaffleExceeds30Days,
+            @ RaffleError::MaxRaffleLengthExceeded,
         constraint = max_tickets > 0
-            @ RaffleError::MaxTicketsIsZero
+            @ RaffleError::MaxTicketsIsZero,
+        constraint = ticket_price >= MIN_TICKET_PRICE_LAMPORTS
+            @ RaffleError::TicketPriceTooLow
     )]
     pub raffle_state: Account<'info, RaffleState>,
     /// System program needed to create the raffle state account.

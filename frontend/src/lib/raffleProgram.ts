@@ -11,6 +11,9 @@ import type { Raffle } from "../idl/types/raffle";
 import { walletStore } from "./walletStore";
 import { get } from "svelte/store";
 
+export const MIN_TICKET_PRICE_LAMPORTS = 100_000;
+export const MIN_TICKET_PRICE_SOL = MIN_TICKET_PRICE_LAMPORTS / 1_000_000_000;
+
 export const PROGRAM_ID = new PublicKey(idl.address);
 
 const CLUSTER: Cluster = "devnet";

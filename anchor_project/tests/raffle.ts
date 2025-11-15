@@ -37,7 +37,7 @@ describe("raffle", () => {
     const raffleManager = await createFundedWallet(provider, 0.5);
     const alice = await createFundedWallet(provider, 0.1);
     const bob = await createFundedWallet(provider, 0.1);
-    const ticketPrice = solToLamports(0.00001);
+    const ticketPrice = solToLamports(0.0001);
     const state: RaffleState = await raffle.create(raffleManager, ticketPrice, 5, 120);
 
     const pda = raffle.state2Pda(state);
@@ -68,7 +68,7 @@ describe("raffle", () => {
       () =>
         raffle.create(
           walletPayer,
-          solToLamports(0.00001),
+          solToLamports(0.0001),
           10,
           -10 // delta in past
         ),
@@ -79,22 +79,34 @@ describe("raffle", () => {
       () =>
         raffle.create(
           walletPayer,
-          solToLamports(0.00001),
+          solToLamports(0.0001),
           10,
           31 * 24 * 60 * 60 // 31 days in future (exceeds 30-day limit)
         ),
-      "RaffleExceeds30Days"
+      "MaxRaffleLengthExceeded"
     );
 
     await assertAnchorError(
       () =>
         raffle.create(
           walletPayer,
-          solToLamports(0.00001),
+          solToLamports(0.0001),
           0, // maxTickets is zero
           120
         ),
       "MaxTicketsIsZero"
+    );
+
+    // Ticket price too low (set below 100_000 lamports)
+    await assertAnchorError(
+      () =>
+        raffle.create(
+          walletPayer,
+          solToLamports(0.000099999), // 1 lamport below minimum
+          2,
+          120
+        ),
+      "TicketPriceTooLow"
     );
 
     await assertAnchorError(
@@ -110,7 +122,7 @@ describe("raffle", () => {
   });
 
   it("buyTickets negative tests", async () => {
-    const state = await raffle.create(walletPayer, solToLamports(0.00001), 1, 120);
+    const state = await raffle.create(walletPayer, solToLamports(0.0001), 1, 120);
     const pda = raffle.state2Pda(state);
 
     // Buy 2 tickets when only 1 is available
@@ -128,7 +140,7 @@ describe("raffle", () => {
   });
 
   it("drawWinner negative tests", async () => {
-    const state = await raffle.create(walletPayer, solToLamports(0.00001), 2, 120);
+    const state = await raffle.create(walletPayer, solToLamports(0.0001), 2, 120);
     const pda = raffle.state2Pda(state);
 
     // Test NoEntrants error
@@ -171,7 +183,7 @@ describe("raffle", () => {
   });
 
   it("drawWinnerCallback negative tests", async () => {
-    const state = await raffle.create(walletPayer, solToLamports(0.00001), 1, 120);
+    const state = await raffle.create(walletPayer, solToLamports(0.0001), 1, 120);
     const pda = raffle.state2Pda(state);
 
     // end the raffle
@@ -202,7 +214,7 @@ describe("raffle", () => {
   it("claimPrize negative tests", async () => {
     const alice = await createFundedWallet(provider, 0.1);
     const mallory = await createFundedWallet(provider, 0.1);
-    const ticketPrice = solToLamports(0.00001);
+    const ticketPrice = solToLamports(0.0001);
 
     const state: RaffleState = await raffle.create(walletPayer, ticketPrice, 3, 120);
 
@@ -227,7 +239,7 @@ describe("raffle", () => {
     const manager = await createFundedWallet(provider, 0.1);
     const notManager = await createFundedWallet(provider, 0.1);
 
-    const state: RaffleState = await raffle.create(manager, solToLamports(0.00001), 2, 120);
+    const state: RaffleState = await raffle.create(manager, solToLamports(0.0001), 2, 120);
 
     const pda = raffle.state2Pda(state);
 
@@ -264,7 +276,7 @@ describe("raffle", () => {
     const raffleManager = await createFundedWallet(provider, 0.1);
     console.log(`Raffle manager created: ${raffleManager.publicKey.toBase58()}`);
 
-    const state: RaffleState = await raffle.create(raffleManager, solToLamports(0.00001), 2, 120);
+    const state: RaffleState = await raffle.create(raffleManager, solToLamports(0.0001), 2, 120);
     const pda = raffle.state2Pda(state);
 
     const balanceBefore = await connection.getBalance(raffleManager.publicKey, "confirmed");

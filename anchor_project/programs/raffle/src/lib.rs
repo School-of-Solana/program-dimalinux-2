@@ -40,11 +40,13 @@ pub mod raffle {
     /// Errors:
     /// - `RaffleError::RaffleEndTimeInPast`: the provided `end_time` must be in the
     ///   future relative to the cluster clock.
-    /// - `RaffleError::RaffleExceeds30Days`: the provided `end_time` cannot be more
+    /// - `RaffleError::MaxRaffleLengthExceeded`: the provided `end_time` cannot be more
     ///   than 30 days from the current time.
     /// - `RaffleError::MaxTicketsIsZero`: `max_tickets` must be at least 1.
     /// - `RaffleError::RaffleTooLarge`: the computed maximum prize pool
     ///   (`ticket_price * max_tickets`) overflowed `u64`.
+    /// - `RaffleError::TicketPriceTooLow`: `ticket_price` must be at least
+    ///   `MIN_TICKET_PRICE_LAMPORTS` (currently 100_000 lamports, i.e. 0.0001 SOL).
     pub fn create_raffle(
         ctx: Context<CreateRaffle>,
         ticket_price: u64,
