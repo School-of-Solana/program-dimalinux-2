@@ -234,7 +234,7 @@
           <div class="info-card winner-card">
             <div class="info-label">Winner</div>
             {#if winnerStr && raffleState.winnerIndex !== null && raffleState.winnerIndex !== undefined}
-              <div class="info-value">
+              <div class="winner-address">
                 <ExplorerLink address={raffleState.entrants[raffleState.winnerIndex]} />
               </div>
             {/if}
@@ -269,13 +269,13 @@
 
     {#if buySig}
       <div class="tx-line">
-        Buy Tx: <ExplorerLink address={buySig} short />
+        Buy Tx: <ExplorerLink address={buySig} />
       </div>
     {/if}
     {#if buyError}<div class="error small">{buyError}</div>{/if}
     {#if actionSig}
       <div class="tx-line">
-        Action Tx: <ExplorerLink address={actionSig} short />
+        Action Tx: <ExplorerLink address={actionSig} />
       </div>
     {/if}
     {#if actionError}<div class="error small">{actionError}</div>{/if}

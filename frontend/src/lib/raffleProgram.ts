@@ -311,18 +311,15 @@ export function explorerURL(addressOrSignature: PublicKey | TransactionSignature
 }
 
 /**
- * Converts a PublicKey or transaction signature to a base58 string.
+ * Converts a PublicKey or transaction signature to both short and full base58 strings.
  * @param address - The PublicKey or transaction signature to convert
- * @param short - If true, returns abbreviated format (first 4 + last 4 chars)
- * @returns The base58 string representation, optionally abbreviated
+ * @returns Object with `short` (abbreviated) and `full` (complete) base58 representations
  */
-export function addressToString(
-  address: PublicKey | TransactionSignature,
-  short: boolean = false
-): string {
-  let str = typeof address === "string" ? address : address.toBase58();
-  if (short && str.length > 10) {
-    str = str.slice(0, 4) + "..." + str.slice(-4);
-  }
-  return str;
+export function addressToString(address: PublicKey | TransactionSignature): {
+  short: string;
+  full: string;
+} {
+  const full = typeof address === "string" ? address : address.toBase58();
+  const short = full.length > 10 ? full.slice(0, 5) + "..." + full.slice(-5) : full;
+  return { short, full };
 }

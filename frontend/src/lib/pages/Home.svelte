@@ -107,7 +107,7 @@
           </div>
           <div class="raffle-details">
             <div class="raffle-end">Ends: {formatDate(bnToNumber(state.endTime))}</div>
-            <div class="raffle-pda">PDA: <ExplorerLink address={pda} short /></div>
+            <div class="raffle-pda">PDA: <ExplorerLink address={pda} /></div>
           </div>
         </button>
       {/each}
