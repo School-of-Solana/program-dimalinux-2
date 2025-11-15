@@ -34,8 +34,10 @@ export interface RaffleState {
 
 function getProvider(): AnchorProvider {
   const wallet = get(walletStore);
-  if (!wallet?.publicKey) {
-    throw new Error("Wallet not connected");
+
+  // Check if wallet is in a ready state (not just connecting)
+  if (!wallet?.publicKey || wallet.connecting) {
+    throw new Error("Wallet not connected or still connecting");
   }
   if (!wallet.signTransaction) {
     throw new Error("Wallet does not support transaction signing");
@@ -48,7 +50,19 @@ function getProvider(): AnchorProvider {
 }
 
 /**
+ * Gets a read-only Raffle program instance that doesn't require a wallet.
+ * Use this for fetching data from the blockchain.
+ * @returns The Raffle program instance
+ */
+function getRaffleProgramReadOnly(): Program<Raffle> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+  const provider = new AnchorProvider(connection, {} as any, AnchorProvider.defaultOptions());
+  return new Program<Raffle>(idl as Idl, provider);
+}
+
+/**
  * Gets the Raffle Anchor program instance using the current wallet provider.
+ * Use this for operations that require signing (transactions).
  * @returns The Raffle program instance
  * @throws Error if wallet is not connected or doesn't support signing
  */
@@ -64,7 +78,7 @@ export function getRaffleProgram(): Program<Raffle> {
  * @returns The raffle state data
  */
 export async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
-  const program = getRaffleProgram();
+  const program = getRaffleProgramReadOnly();
   return (await program.account.raffleState.fetch(pda, "confirmed")) as RaffleState;
 }
 
@@ -219,7 +233,7 @@ export function getRaffleStateAddress(
  * @returns Array of tuples containing the PDA PublicKey and the RaffleState data
  */
 export async function getAllRaffles(): Promise<Array<[PublicKey, RaffleState]>> {
-  const program = getRaffleProgram();
+  const program = getRaffleProgramReadOnly();
   const accounts = await program.account.raffleState.all();
   return accounts.map((account) => [account.publicKey, account.account as RaffleState]);
 }

@@ -37,8 +37,16 @@
     actionError = null;
     actionSig = null;
     try {
+      // getRaffleState doesn't need a wallet
       raffleState = await getRaffleState(new PublicKey(pda));
-      programUpgradeAuthority = await getProgramUpgradeAuthority();
+
+      // Only fetch program upgrade authority if wallet is connected and ready
+      // (This determines if current user can close the raffle as program owner)
+      if ($walletStore.connected && !$walletStore.connecting) {
+        programUpgradeAuthority = await getProgramUpgradeAuthority();
+      } else {
+        programUpgradeAuthority = null;
+      }
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -46,6 +54,28 @@
     }
   }
   onMount(load);
+
+  // Reload when wallet connection or account changes
+  // This ensures UI updates when user connects/disconnects/switches wallets
+  let prevConnected: boolean | undefined = undefined;
+  let prevPublicKey: string | null = null;
+
+  $: {
+    const currentConnected = $walletStore.connected;
+    const currentPublicKey = $walletStore.publicKey?.toBase58() ?? null;
+
+    // Reload if connection state or public key changed
+    // (UI elements like canBuy, canClose, etc. depend on wallet state)
+    if (
+      prevConnected !== undefined &&
+      (prevConnected !== currentConnected || prevPublicKey !== currentPublicKey)
+    ) {
+      void load();
+    }
+
+    prevConnected = currentConnected;
+    prevPublicKey = currentPublicKey;
+  }
 
   function refreshAfterDelay(): void {
     setTimeout(() => {

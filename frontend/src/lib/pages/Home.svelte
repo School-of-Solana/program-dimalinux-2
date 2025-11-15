@@ -32,13 +32,6 @@
   }
 
   async function loadRaffles(): Promise<void> {
-    if (!$walletStore.connected) {
-      raffles = [];
-      error = null;
-      loading = false;
-      return;
-    }
-
     loading = true;
     error = null;
     try {
@@ -57,7 +50,7 @@
   });
 
   // Reload raffles when wallet connection or account changes
-  // Use a separate tracking variable to ensure the UI updates in sync
+  // This ensures UI updates when user connects/disconnects/switches wallets
   let prevConnected: boolean | undefined = undefined;
   let prevPublicKey: string | null = null;
 
@@ -65,7 +58,8 @@
     const currentConnected = $walletStore.connected;
     const currentPublicKey = $walletStore.publicKey?.toBase58() ?? null;
 
-    // Only reload if the connection state or public key actually changed
+    // Reload if connection state or public key changed
+    // (getAllRaffles doesn't need wallet, but UI elements like "canBuy" depend on wallet state)
     if (
       prevConnected !== undefined &&
       (prevConnected !== currentConnected || prevPublicKey !== currentPublicKey)
@@ -84,11 +78,7 @@
     <button class="create-btn" on:click={goCreate}>+ Create Raffle</button>
   </div>
 
-  {#if !$walletStore.connected}
-    <div class="wallet-prompt">
-      <p>Connect your wallet to view raffles</p>
-    </div>
-  {:else if loading}
+  {#if loading}
     <div class="loading">Loading raffles...</div>
   {:else if error}
     <div class="error">Error loading raffles: {error}</div>
