@@ -18,10 +18,12 @@
 </script>
 
 <main>
-  <h1>Solana Raffle</h1>
-  <div class="top-bar">
-    <WalletProvider {localStorageKey} wallets={walletAdapters} autoConnect />
-    <WalletMultiButton />
+  <div class="app-header">
+    <h1>Solana Raffle</h1>
+    <div class="wallet-controls">
+      <WalletProvider {localStorageKey} wallets={walletAdapters} autoConnect />
+      <WalletMultiButton />
+    </div>
   </div>
 
   <div class="page-container">
@@ -50,6 +52,16 @@
     margin: 0 auto;
     padding: 1rem 1.25rem 3rem;
   }
+
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* center the group (title + button) */
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: nowrap;
+  }
+
   h1 {
     font-size: 2.5rem;
     font-weight: 800;
@@ -57,16 +69,19 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin: 0.5rem 0 1rem;
+    margin: 0.5rem 0 0.25rem;
     letter-spacing: -0.02em;
     text-shadow: 0 0 30px rgba(53, 255, 242, 0.2);
+    text-align: center; /* ensure centered when stacked */
   }
-  .top-bar {
+
+  .wallet-controls {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    justify-content: center; /* center with title */
+    gap: 0.75rem;
+    /* remove min-width to avoid pushing layout */
+    flex: 0 0 auto;
   }
 
   .page-container {
@@ -90,5 +105,16 @@
 
   .footer-label {
     color: #94a3b8;
+  }
+
+  @media (max-width: 900px) {
+    .app-header {
+      flex-direction: column; /* stack title over button */
+      gap: 0.5rem; /* keep tighter gap when stacked */
+    }
+    .wallet-controls {
+      width: auto;
+      justify-content: center; /* keep centered under title */
+    }
   }
 </style>
