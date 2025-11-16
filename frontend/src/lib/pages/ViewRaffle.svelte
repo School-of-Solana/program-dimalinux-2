@@ -171,6 +171,7 @@
   $: soldOut = maxTickets > 0 && ticketsSold >= maxTickets;
   $: remaining = Math.max(0, maxTickets - ticketsSold);
   $: canBuy = $walletStore.connected && !ended && !soldOut && !winnerDrawn;
+  $: needsWalletToBuy = !$walletStore.connected && !ended && !soldOut && !winnerDrawn;
   $: canDraw = !winnerDrawn && (ended || soldOut) && ticketsSold > 0;
   $: canClaim = $walletStore.connected && winnerDrawn && !claimed;
   $: isClaimingForSelf = userIsWinner;
@@ -219,13 +220,16 @@
         <div class="info-value">
           <span class="ticket-count">{ticketsSold} / {maxTickets}</span>
           {#if soldOut}<span class="sold-out-badge">SOLD OUT</span>{/if}
+          {#if ended && !soldOut}<span class="ended-badge">ENDED</span>{/if}
         </div>
       </div>
 
       <div class="info-card">
         <div class="info-label">End Time</div>
         <div class="info-value">
-          <TimeDisplay unixTimestamp={endTimeUnix} />
+          <span class:time-past={ended}>
+            <TimeDisplay unixTimestamp={endTimeUnix} />
+          </span>
         </div>
       </div>
 
@@ -248,6 +252,9 @@
     </div>
 
     <div class="action-bar">
+      {#if needsWalletToBuy}
+        <div class="wallet-prompt">Connect wallet to buy tickets</div>
+      {/if}
       {#if canBuy}
         <button class="buy-btn" on:click={buyClicked} disabled={busy || qty < 1}>Buy Tickets</button
         >
@@ -433,6 +440,21 @@
     vertical-align: baseline;
   }
 
+  .ended-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.2rem 0.6rem; /* align with status-badge */
+    background: rgba(107, 114, 128, 0.18);
+    color: #9ca3af;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid rgba(107, 114, 128, 0.28);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    vertical-align: baseline;
+  }
+
   /* Action bar & controls */
   .action-bar {
     display: flex;
@@ -452,6 +474,20 @@
     cursor: not-allowed;
   }
 
+  .wallet-prompt {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.7rem 1.25rem; /* match buttons */
+    font-size: 1rem; /* match buttons */
+    line-height: 1; /* match buttons */
+    border-radius: 4px; /* match buttons */
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    color: #fbbf24;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
   .qty {
     width: 90px;
     padding: 0.45rem 0.5rem;
@@ -463,5 +499,9 @@
 
   .tx-line {
     font-size: 0.7rem;
+  }
+
+  .time-past {
+    color: #9ca3af; /* muted gray to indicate in the past */
   }
 </style>

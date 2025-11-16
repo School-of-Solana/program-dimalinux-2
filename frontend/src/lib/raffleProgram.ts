@@ -100,7 +100,13 @@ export async function createRaffleOnChain(
   const raffle = getRaffleProgram();
   const raffleOwner: PublicKey = raffle.provider.publicKey!;
 
-  const [raffleStatePda] = getRaffleStateAddress(raffleOwner, ticketPrice, maxTickets, endTime, raffle.programId);
+  const [raffleStatePda] = getRaffleStateAddress(
+    raffleOwner,
+    ticketPrice,
+    maxTickets,
+    endTime,
+    raffle.programId
+  );
 
   // Check if a raffle with this PDA already exists
   const existingAccount = await connection.getAccountInfo(raffleStatePda);
