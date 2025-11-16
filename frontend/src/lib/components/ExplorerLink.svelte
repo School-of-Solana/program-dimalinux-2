@@ -59,12 +59,14 @@
   }
 
   .explorer-link {
-    color: #35fff2;
+    color: #cbd5e1;
     text-decoration: none;
     font-family: monospace;
     font-size: 0.9em;
+    transition: color 0.2s;
   }
   .explorer-link:hover {
+    color: #35fff2;
     text-decoration: underline;
   }
 

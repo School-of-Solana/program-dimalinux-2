@@ -2,7 +2,8 @@
   import { navigate } from "../router";
   import { onMount } from "svelte";
   import { getAllRaffles, type RaffleState, bnToNumber } from "../raffleProgram";
-  import { getRaffleStatus } from "../raffleStatus";
+  import { getRaffleStatus, getRaffleSortKey } from "../raffleStatus";
+  import { formatDeltaTime } from "../timeFormat";
   import type { PublicKey } from "@solana/web3.js";
   import { walletStore } from "../walletStore";
   import ExplorerLink from "../components/ExplorerLink.svelte";
@@ -26,18 +27,19 @@
     navigate("/raffle/" + pda.toBase58());
   }
 
-  function formatDate(epochSeconds: number): string {
-    const d = new Date(epochSeconds * 1000);
-    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
-  }
-
   async function loadRaffles(): Promise<void> {
     loading = true;
     error = null;
     try {
       raffles = await getAllRaffles();
-      // Sort by end time descending (most recent first)
-      raffles.sort((a, b) => bnToNumber(b[1].endTime) - bnToNumber(a[1].endTime));
+      raffles.sort((a, b) => {
+        const [rankA, endA] = getRaffleSortKey(a[1]);
+        const [rankB, endB] = getRaffleSortKey(b[1]);
+        if (rankA !== rankB) {
+          return rankA - rankB;
+        }
+        return endA - endB;
+      });
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -93,20 +95,14 @@
         {@const status = getRaffleStatus(state)}
         <button class="raffle-item" on:click={() => goToRaffle(pda)}>
           <div class="raffle-main">
-            <div class="raffle-status status-{status.cssClass}">
-              {status.display}
-            </div>
+            <div class="raffle-status status-{status.cssClass}">{status.display}</div>
             <div class="raffle-info">
-              <div class="raffle-price">
-                {(bnToNumber(state.ticketPrice) / 1_000_000_000).toFixed(4)} SOL
-              </div>
-              <div class="raffle-tickets">
-                {state.entrants.length} / {state.maxTickets} tickets
-              </div>
+              <div class="raffle-price">{bnToNumber(state.ticketPrice) / 1_000_000_000} SOL</div>
+              <div class="raffle-tickets">{state.entrants.length} / {state.maxTickets} tickets</div>
             </div>
           </div>
           <div class="raffle-details">
-            <div class="raffle-end">Ends: {formatDate(bnToNumber(state.endTime))}</div>
+            <div class="raffle-end">Ends: {formatDeltaTime(bnToNumber(state.endTime))}</div>
             <div class="raffle-pda">PDA: <ExplorerLink address={pda} /></div>
           </div>
         </button>

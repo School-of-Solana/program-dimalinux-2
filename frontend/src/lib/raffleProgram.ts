@@ -1,11 +1,11 @@
 import {
+  type Cluster,
+  clusterApiUrl,
   Connection,
   PublicKey,
   type TransactionSignature,
-  clusterApiUrl,
-  type Cluster,
 } from "@solana/web3.js";
-import { Program, AnchorProvider, utils, BN, setProvider, type Idl } from "@coral-xyz/anchor";
+import { AnchorProvider, BN, type Idl, Program, setProvider, utils } from "@coral-xyz/anchor";
 import idl from "../idl/raffle.json";
 import type { Raffle } from "../idl/types/raffle";
 import { walletStore } from "./walletStore";
@@ -90,6 +90,7 @@ export async function getRaffleState(pda: PublicKey): Promise<RaffleState> {
  * @param ticketPrice BN
  * @param maxTickets number
  * @param endTime BN epoch seconds when the raffle should end
+ * @throws Error if a raffle with the same end time already exists for this manager
  */
 export async function createRaffleOnChain(
   ticketPrice: BN,
@@ -100,6 +101,12 @@ export async function createRaffleOnChain(
   const raffleOwner: PublicKey = raffle.provider.publicKey!;
 
   const [raffleStatePda] = getRaffleStateAddress(raffleOwner, endTime, raffle.programId);
+
+  // Check if a raffle with this PDA already exists
+  const existingAccount = await connection.getAccountInfo(raffleStatePda);
+  if (existingAccount !== null) {
+    throw new Error("End time already used by manager, pick a new value");
+  }
 
   const signature: TransactionSignature = await raffle.methods
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
@@ -232,7 +239,7 @@ export function getRaffleStateAddress(
 }
 
 /**
- * Fetches all raffle state accounts from the program.
+ * Fetches all raffle state PDAs from the program, sorted by end time (soonest first).
  * @returns Array of tuples containing the PDA PublicKey and the RaffleState data
  */
 export async function getAllRaffles(): Promise<Array<[PublicKey, RaffleState]>> {

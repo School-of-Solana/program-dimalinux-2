@@ -24,6 +24,37 @@ export const RaffleStatus = {
   EntriesClosed: { display: "Entries Closed", cssClass: "entries-closed" } as StatusInfo,
 } as const;
 
+// Added: explicit status order for sorting (most interesting first)
+export const RAFFLE_STATUS_ORDER: readonly StatusInfo[] = [
+  RaffleStatus.Active,
+  RaffleStatus.ReadyToDraw,
+  RaffleStatus.Drawing,
+  RaffleStatus.AwaitingClaim,
+  RaffleStatus.Claimed,
+  RaffleStatus.EntriesClosed,
+];
+
+// Precompute rank lookup by cssClass for O(1) access.
+const STATUS_RANK: Record<string, number> = Object.fromEntries(
+  RAFFLE_STATUS_ORDER.map((s, i) => [s.cssClass, i])
+);
+
+/** Return the numeric rank of a status (lower is higher priority). */
+export function getStatusRank(info: StatusInfo): number {
+  return STATUS_RANK[info.cssClass] ?? 999;
+}
+
+/** Convenience helper: derive a composite sort key [statusRank, endTimeSeconds]. */
+export function getRaffleSortKey(state: RaffleState): [number, number] {
+  const statusInfo = getRaffleStatus(state);
+  const rank = getStatusRank(statusInfo);
+  const endTime = bnToNumber(state.endTime);
+  const now = Math.floor(Date.now() / 1000);
+  // Future raffles: sort by soonest first (ASC). Past raffles: sort by most recent first (DESC via negative key).
+  const timeKey = endTime >= now ? endTime : -endTime;
+  return [rank, timeKey];
+}
+
 /**
  * Determines the current status of a raffle based on its state.
  * @param state - The raffle state from the blockchain

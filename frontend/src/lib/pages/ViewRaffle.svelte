@@ -15,6 +15,7 @@
   import { PublicKey } from "@solana/web3.js";
   import { navigate } from "../router";
   import ExplorerLink from "../components/ExplorerLink.svelte";
+  import TimeDisplay from "../components/TimeDisplay.svelte";
 
   export let pda: string; // raffle PDA
 
@@ -210,7 +211,7 @@
 
       <div class="info-card">
         <div class="info-label">Ticket Price</div>
-        <div class="info-value highlight">{ticketPriceSol} SOL</div>
+        <div class="info-value">{ticketPriceSol} SOL</div>
       </div>
 
       <div class="info-card">
@@ -224,7 +225,7 @@
       <div class="info-card">
         <div class="info-label">End Time</div>
         <div class="info-value">
-          {endTimeUnix ? new Date(endTimeUnix * 1000).toLocaleString() : "—"}
+          <TimeDisplay unixTimestamp={endTimeUnix} />
         </div>
       </div>
 
@@ -233,12 +234,12 @@
         {#if status !== RaffleStatus.Active && status !== RaffleStatus.EntriesClosed}
           <div class="info-card winner-card">
             <div class="info-label">Winner</div>
-            {#if winnerStr && raffleState.winnerIndex !== null && raffleState.winnerIndex !== undefined}
-              <div class="winner-address">
-                <ExplorerLink address={raffleState.entrants[raffleState.winnerIndex]} />
-              </div>
-            {/if}
-            <div class="winner-status">
+            <div class="winner-content">
+              {#if winnerStr && raffleState.winnerIndex !== null && raffleState.winnerIndex !== undefined}
+                <div class="winner-address">
+                  <ExplorerLink address={raffleState.entrants[raffleState.winnerIndex]} />
+                </div>
+              {/if}
               <span class="status-badge status-{status.cssClass}">{status.display}</span>
             </div>
           </div>
@@ -355,74 +356,78 @@
   }
 
   .info-value {
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: #f1f5f9;
     word-break: break-word;
   }
 
-  .info-value.highlight {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #35fff2;
-  }
-
-  .ticket-count {
-    font-weight: 500;
-  }
-
+  /* Winner row inline & consistent sizing */
   .winner-card {
     position: relative;
     border-color: rgba(139, 92, 246, 0.3);
   }
 
-  .winner-status {
-    margin-top: 0.75rem;
+  .winner-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1em;
+    flex-wrap: wrap;
   }
 
+  .winner-address {
+    flex: 0 1 auto;
+    font-size: 1rem; /* match base info-value size */
+  }
+  .winner-address :global(a) {
+    font-size: inherit; /* ensure ExplorerLink inherits */
+  }
+
+  /* Status badges normalized size */
   .status-badge {
     display: inline-block;
-    padding: 0.25rem 0.75rem;
+    padding: 0.2rem 0.6rem;
     border-radius: 4px;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
 
   .status-badge.status-ready-to-draw {
-    background: rgba(251, 191, 36, 0.2);
+    background: rgba(251, 191, 36, 0.18);
     color: #fbbf24;
-    border: 1px solid rgba(251, 191, 36, 0.3);
+    border: 1px solid rgba(251, 191, 36, 0.28);
   }
 
   .status-badge.status-drawing {
-    background: rgba(168, 85, 247, 0.2);
+    background: rgba(168, 85, 247, 0.18);
     color: #a855f7;
-    border: 1px solid rgba(168, 85, 247, 0.3);
+    border: 1px solid rgba(168, 85, 247, 0.28);
   }
 
   .status-badge.status-awaiting-claim {
-    background: rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.18);
     color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.28);
   }
 
   .status-badge.status-claimed {
-    background: rgba(34, 197, 94, 0.2);
+    background: rgba(34, 197, 94, 0.18);
     color: #4ade80;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    border: 1px solid rgba(34, 197, 94, 0.28);
   }
 
   .sold-out-badge {
     display: inline-block;
     margin-left: 0.5rem;
-    padding: 0.25rem 0.75rem;
-    background: rgba(239, 68, 68, 0.2);
+    padding: 0.2rem 0.6rem; /* align with status-badge */
+    background: rgba(239, 68, 68, 0.18);
     color: #fca5a5;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: 600;
     border-radius: 4px;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    border: 1px solid rgba(239, 68, 68, 0.28);
     text-transform: uppercase;
     letter-spacing: 0.03em;
     vertical-align: baseline;
