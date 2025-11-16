@@ -15,13 +15,12 @@ pub struct CloseRaffle<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    /// CHECK: Raffle manager key from raffle_state; receives rent refund.
-    /// When signer is the raffle manager, this is the same account.
-    /// When signer is the program owner, this is where rent goes.
+    /// CHECK: Raffle manager; receives rent refund on close.
     #[account(mut)]
     pub raffle_manager: UncheckedAccount<'info>,
 
-    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; closed to `raffle_manager`.
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].
+    /// Closed to `raffle_manager` when empty or prize claimed.
     #[account(
         mut,
         close = raffle_manager,
@@ -29,6 +28,8 @@ pub struct CloseRaffle<'info> {
         seeds = [
             RAFFLE_SEED.as_bytes(),
             raffle_state.raffle_manager.key().as_ref(),
+            raffle_state.ticket_price.to_le_bytes().as_ref(),
+            raffle_state.max_tickets.to_le_bytes().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump,
@@ -40,7 +41,7 @@ pub struct CloseRaffle<'info> {
     )]
     pub raffle_state: Account<'info, RaffleState>,
 
-    /// The program data account containing upgrade authority for this program.
+    /// Program data account (upgrade authority source).
     #[account(
         seeds = [crate::ID.as_ref()],
         bump,

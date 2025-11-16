@@ -63,7 +63,7 @@ export class RaffleTestHelper {
   ): Promise<RaffleState> {
     const now = Math.floor(Date.now() / 1000);
     const endTime = new BN(now + deltaToEndSecs);
-    const [pda, bump] = this.pda(raffleOwner.publicKey, endTime);
+    const [pda, bump] = this.pda(raffleOwner.publicKey, ticketPrice, maxTickets, endTime);
     console.log(`Raffle PDA: ${pda.toBase58()}, bump: ${bump}`);
 
     const sig: TransactionSignature = await this.program.methods
@@ -331,11 +331,13 @@ export class RaffleTestHelper {
   /**
    * Derives the PDA for a raffle state account.
    */
-  pda(raffleOwner: PublicKey, endTime: BN): [PublicKey, number] {
+  pda(raffleOwner: PublicKey, ticketPrice: BN, maxTickets: number, endTime: BN): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [
         anchor.utils.bytes.utf8.encode("RaffleSeed"),
         raffleOwner.toBuffer(),
+        ticketPrice.toArrayLike(Buffer, "le", 8),
+        new BN(maxTickets).toArrayLike(Buffer, "le", 4),
         endTime.toArrayLike(Buffer, "le", 8),
       ],
       this.program.programId
@@ -346,7 +348,7 @@ export class RaffleTestHelper {
    * Converts a RaffleState to its PDA address.
    */
   state2Pda(state: RaffleState): PublicKey {
-    const [pda, _bump] = this.pda(state.raffleManager, state.endTime);
+    const [pda, _bump] = this.pda(state.raffleManager, state.ticketPrice, state.maxTickets, state.endTime);
     return pda;
   }
 

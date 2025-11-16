@@ -35,21 +35,17 @@ pub(crate) fn draw_winner_callback_impl(
 
 #[derive(Accounts)]
 pub struct DrawWinnerCallback<'info> {
-    /// Callback can only be executed by the VRF program through CPI. Value must be
-    /// 9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw. MagicBlock calls this PDA
-    /// the "program identity", but it is a PDA owned by the VRF program, not the
-    /// VRF program itself.
-    // Not-in-IDL comment: we check the address in the code (executed last) so
-    // the other constraints can be tested.
-    //#[account(address = VRF_PROGRAM_IDENTITY)]
+    /// VRF program identity signer (validated in code last to surface other constraint errors first).
     pub vrf_program_identity: Signer<'info>,
-    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; mutated to set winner.
-    /// Validated first to make the draw_winner_started and winner_index checks testable.
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].
+    /// Mutated to record `winner_index` and emit the WinnerDrawnEvent.
     #[account(
         mut,
         seeds = [
             RAFFLE_SEED.as_bytes(),
             raffle_state.raffle_manager.key().as_ref(),
+            raffle_state.ticket_price.to_le_bytes().as_ref(),
+            raffle_state.max_tickets.to_le_bytes().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump,

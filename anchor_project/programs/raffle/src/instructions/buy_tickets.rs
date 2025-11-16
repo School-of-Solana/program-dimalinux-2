@@ -44,12 +44,15 @@ pub struct BuyTickets<'info> {
     /// Buyer paying for tickets; must sign.
     #[account(mut)]
     pub buyer: Signer<'info>,
-    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; receives ticket lamports.
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].
+    /// Receives ticket lamports and is debited later when prize claimed.
     #[account(
         mut,
         seeds = [
             RAFFLE_SEED.as_bytes(),
             raffle_state.raffle_manager.key().as_ref(),
+            raffle_state.ticket_price.to_le_bytes().as_ref(),
+            raffle_state.max_tickets.to_le_bytes().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump,
@@ -64,8 +67,8 @@ pub struct BuyTickets<'info> {
             @ RaffleError::InsufficientTickets
     )]
     pub raffle_state: Account<'info, RaffleState>,
-    /// System program (transfer lamports).
+    /// System program (lamport transfers).
     pub system_program: Program<'info, System>,
-    /// Clock sysvar for timestamp validation
+    /// Clock sysvar for timestamp validation.
     pub clock: Sysvar<'info, Clock>,
 }

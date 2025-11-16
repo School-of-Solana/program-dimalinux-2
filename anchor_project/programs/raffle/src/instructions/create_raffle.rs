@@ -41,11 +41,11 @@ pub(crate) fn create_raffle_impl(
 #[derive(Accounts)]
 #[instruction(ticket_price: u64, max_tickets: u32, end_time: i64)]
 pub struct CreateRaffle<'info> {
-    /// Raffle manager and payer for raffle_state account creation
+    /// Raffle manager and payer for raffle_state account creation.
     #[account(mut)]
     pub raffle_owner: Signer<'info>,
-    /// Raffle state PDA initialized with seeds [RAFFLE_SEED, raffle_owner, end_time].
-    /// Space is derived from max_tickets; rent paid by `raffle_owner`.
+    /// Raffle state PDA [RAFFLE_SEED, raffle_owner, ticket_price, max_tickets, end_time].
+    /// Space scales with `max_tickets`; rent paid by `raffle_owner`.
     #[account(
         init,
         payer = raffle_owner,
@@ -53,6 +53,8 @@ pub struct CreateRaffle<'info> {
         seeds = [
             RAFFLE_SEED.as_bytes(),
             raffle_owner.key().as_ref(),
+            ticket_price.to_le_bytes().as_ref(),
+            max_tickets.to_le_bytes().as_ref(),
             end_time.to_le_bytes().as_ref(),
         ],
         bump,
@@ -66,8 +68,8 @@ pub struct CreateRaffle<'info> {
             @ RaffleError::TicketPriceTooLow
     )]
     pub raffle_state: Account<'info, RaffleState>,
-    /// System program needed to create the raffle state account.
+    /// System program for account creation.
     pub system_program: Program<'info, System>,
-    /// Clock sysvar for timestamp validation
+    /// Clock sysvar for timestamp validation.
     pub clock: Sysvar<'info, Clock>,
 }

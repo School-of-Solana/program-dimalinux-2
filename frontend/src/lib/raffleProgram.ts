@@ -100,12 +100,12 @@ export async function createRaffleOnChain(
   const raffle = getRaffleProgram();
   const raffleOwner: PublicKey = raffle.provider.publicKey!;
 
-  const [raffleStatePda] = getRaffleStateAddress(raffleOwner, endTime, raffle.programId);
+  const [raffleStatePda] = getRaffleStateAddress(raffleOwner, ticketPrice, maxTickets, endTime, raffle.programId);
 
   // Check if a raffle with this PDA already exists
   const existingAccount = await connection.getAccountInfo(raffleStatePda);
   if (existingAccount !== null) {
-    throw new Error("End time already used by manager, pick a new value");
+    throw new Error("A raffle with this configuration already exists");
   }
 
   const signature: TransactionSignature = await raffle.methods
@@ -217,12 +217,16 @@ export async function closeRaffle(pda: PublicKey): Promise<TransactionSignature>
 /**
  * Derives the PDA (Program Derived Address) for a raffle state account.
  * @param raffleOwner - The public key of the raffle owner/manager
+ * @param ticketPrice - The raffle ticket price as a BN (lamports)
+ * @param maxTickets - Maximum number of tickets for the raffle
  * @param endTime - The raffle end time as a BN (epoch seconds)
  * @param programID - The raffle program ID
  * @returns A tuple of [PDA PublicKey, bump seed]
  */
 export function getRaffleStateAddress(
   raffleOwner: PublicKey,
+  ticketPrice: BN,
+  maxTickets: number,
   endTime: BN,
   programID: PublicKey
 ): [PublicKey, number] {
@@ -231,6 +235,10 @@ export function getRaffleStateAddress(
     [
       utils.bytes.utf8.encode(RAFFLE_SEED),
       raffleOwner.toBuffer(),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      ticketPrice.toArrayLike(Buffer, "le", 8) as Buffer,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      new BN(maxTickets).toArrayLike(Buffer, "le", 4) as Buffer,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       endTime.toArrayLike(Buffer, "le", 8) as Buffer,
     ],

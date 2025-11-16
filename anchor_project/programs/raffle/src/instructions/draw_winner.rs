@@ -49,12 +49,15 @@ pub struct DrawWinner<'info> {
     /// Payer for the VRF request and any CPI fees; must sign.
     #[account(mut)]
     pub oracle_payer: Signer<'info>,
-    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; marked started and used as VRF caller seed.
+    /// Raffle state PDA derived from [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].
+    /// This instruction sets `draw_winner_started`; its address is used as the VRF caller seed.
     #[account(
         mut,
         seeds = [
             RAFFLE_SEED.as_bytes(),
             raffle_state.raffle_manager.key().as_ref(),
+            raffle_state.ticket_price.to_le_bytes().as_ref(),
+            raffle_state.max_tickets.to_le_bytes().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump,
@@ -70,9 +73,9 @@ pub struct DrawWinner<'info> {
             @ RaffleError::RaffleNotOver
     )]
     pub raffle_state: Account<'info, RaffleState>,
-    /// CHECK: The oracle queue to use (address constrained to DEFAULT_QUEUE).
+    /// CHECK: Oracle queue (must match DEFAULT_QUEUE constant).
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
-    /// Clock sysvar for timestamp validation
+    /// Clock sysvar for timestamp validation.
     pub clock: Sysvar<'info, Clock>,
 }

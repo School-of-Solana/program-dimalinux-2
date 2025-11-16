@@ -20,18 +20,19 @@ pub(crate) fn claim_prize_impl(ctx: Context<ClaimPrize>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct ClaimPrize<'info> {
-    /// Winner receives prize lamports. Anyone can trigger the claim on behalf
-    /// of the winner.
-    /// CHECK: Winner is validated against raffle_state.entrants[winner_index]
-    /// via the constraint on raffle_state.
+    /// Winner receives prize lamports (any signer may facilitate claim).
+    /// CHECK: Validated against stored `winner_index` in raffle_state.
     #[account(mut)]
     pub winner: UncheckedAccount<'info>,
-    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; pays prize to winner and flips `claimed`.
+    /// Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].
+    /// Debited to pay the prize; `claimed` flipped to true.
     #[account(
         mut,
         seeds = [
             RAFFLE_SEED.as_bytes(),
             raffle_state.raffle_manager.key().as_ref(),
+            raffle_state.ticket_price.to_le_bytes().as_ref(),
+            raffle_state.max_tickets.to_le_bytes().as_ref(),
             raffle_state.end_time.to_le_bytes().as_ref()
         ],
         bump,

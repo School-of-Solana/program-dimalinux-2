@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/raffle.json`.
  */
 export type Raffle = {
-  "address": "4LcauHsjXDZqGonxZu261YLPHV3TRsLYZ7o1pTT5q2uQ",
+  "address": "Rafs56vPtgBLfMQoafTVmf4QB11gqqkysfJx949d99p",
   "metadata": {
     "name": "raffle",
     "version": "0.1.0",
@@ -50,7 +50,8 @@ export type Raffle = {
         {
           "name": "raffleState",
           "docs": [
-            "Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; receives ticket lamports."
+            "Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].",
+            "Receives ticket lamports and is debited later when prize claimed."
           ],
           "writable": true,
           "pda": {
@@ -77,6 +78,16 @@ export type Raffle = {
               },
               {
                 "kind": "account",
+                "path": "raffle_state.ticket_price",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.max_tickets",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
                 "path": "raffle_state.end_time",
                 "account": "raffleState"
               }
@@ -86,14 +97,14 @@ export type Raffle = {
         {
           "name": "systemProgram",
           "docs": [
-            "System program (transfer lamports)."
+            "System program (lamport transfers)."
           ],
           "address": "11111111111111111111111111111111"
         },
         {
           "name": "clock",
           "docs": [
-            "Clock sysvar for timestamp validation"
+            "Clock sysvar for timestamp validation."
           ],
           "address": "SysvarC1ock11111111111111111111111111111111"
         }
@@ -135,16 +146,15 @@ export type Raffle = {
         {
           "name": "winner",
           "docs": [
-            "Winner receives prize lamports. Anyone can trigger the claim on behalf",
-            "of the winner.",
-            "via the constraint on raffle_state."
+            "Winner receives prize lamports (any signer may facilitate claim)."
           ],
           "writable": true
         },
         {
           "name": "raffleState",
           "docs": [
-            "Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; pays prize to winner and flips `claimed`."
+            "Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].",
+            "Debited to pay the prize; `claimed` flipped to true."
           ],
           "writable": true,
           "pda": {
@@ -167,6 +177,16 @@ export type Raffle = {
               {
                 "kind": "account",
                 "path": "raffle_state.raffle_manager",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.ticket_price",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.max_tickets",
                 "account": "raffleState"
               },
               {
@@ -219,10 +239,6 @@ export type Raffle = {
         },
         {
           "name": "raffleManager",
-          "docs": [
-            "When signer is the raffle manager, this is the same account.",
-            "When signer is the program owner, this is where rent goes."
-          ],
           "writable": true,
           "relations": [
             "raffleState"
@@ -231,7 +247,8 @@ export type Raffle = {
         {
           "name": "raffleState",
           "docs": [
-            "Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; closed to `raffle_manager`."
+            "Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].",
+            "Closed to `raffle_manager` when empty or prize claimed."
           ],
           "writable": true,
           "pda": {
@@ -258,6 +275,16 @@ export type Raffle = {
               },
               {
                 "kind": "account",
+                "path": "raffle_state.ticket_price",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.max_tickets",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
                 "path": "raffle_state.end_time",
                 "account": "raffleState"
               }
@@ -267,45 +294,45 @@ export type Raffle = {
         {
           "name": "programData",
           "docs": [
-            "The program data account containing upgrade authority for this program."
+            "Program data account (upgrade authority source)."
           ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  49,
-                  153,
-                  84,
-                  233,
-                  78,
-                  136,
-                  22,
-                  15,
-                  89,
-                  148,
-                  69,
-                  178,
-                  154,
-                  19,
-                  116,
-                  43,
-                  163,
-                  35,
-                  246,
-                  239,
-                  43,
-                  127,
-                  111,
-                  1,
-                  44,
-                  126,
-                  12,
-                  124,
+                  6,
+                  76,
+                  2,
+                  161,
+                  52,
+                  62,
                   174,
-                  125,
-                  107,
-                  3
+                  115,
+                  218,
+                  66,
+                  133,
+                  58,
+                  253,
+                  187,
+                  181,
+                  96,
+                  47,
+                  25,
+                  12,
+                  54,
+                  88,
+                  207,
+                  86,
+                  43,
+                  251,
+                  93,
+                  229,
+                  158,
+                  114,
+                  109,
+                  58,
+                  159
                 ]
               }
             ],
@@ -367,11 +394,13 @@ export type Raffle = {
         "Errors:",
         "- `RaffleError::RaffleEndTimeInPast`: the provided `end_time` must be in the",
         "future relative to the cluster clock.",
-        "- `RaffleError::RaffleExceeds30Days`: the provided `end_time` cannot be more",
+        "- `RaffleError::MaxRaffleLengthExceeded`: the provided `end_time` cannot be more",
         "than 30 days from the current time.",
         "- `RaffleError::MaxTicketsIsZero`: `max_tickets` must be at least 1.",
         "- `RaffleError::RaffleTooLarge`: the computed maximum prize pool",
-        "(`ticket_price * max_tickets`) overflowed `u64`."
+        "(`ticket_price * max_tickets`) overflowed `u64`.",
+        "- `RaffleError::TicketPriceTooLow`: `ticket_price` must be at least",
+        "`MIN_TICKET_PRICE_LAMPORTS` (currently 100_000 lamports, i.e. 0.0001 SOL)."
       ],
       "discriminator": [
         226,
@@ -387,7 +416,7 @@ export type Raffle = {
         {
           "name": "raffleOwner",
           "docs": [
-            "Raffle manager and payer for raffle_state account creation"
+            "Raffle manager and payer for raffle_state account creation."
           ],
           "writable": true,
           "signer": true
@@ -395,8 +424,8 @@ export type Raffle = {
         {
           "name": "raffleState",
           "docs": [
-            "Raffle state PDA initialized with seeds [RAFFLE_SEED, raffle_owner, end_time].",
-            "Space is derived from max_tickets; rent paid by `raffle_owner`."
+            "Raffle state PDA [RAFFLE_SEED, raffle_owner, ticket_price, max_tickets, end_time].",
+            "Space scales with `max_tickets`; rent paid by `raffle_owner`."
           ],
           "writable": true,
           "pda": {
@@ -422,6 +451,14 @@ export type Raffle = {
               },
               {
                 "kind": "arg",
+                "path": "ticketPrice"
+              },
+              {
+                "kind": "arg",
+                "path": "maxTickets"
+              },
+              {
+                "kind": "arg",
                 "path": "endTime"
               }
             ]
@@ -430,14 +467,14 @@ export type Raffle = {
         {
           "name": "systemProgram",
           "docs": [
-            "System program needed to create the raffle state account."
+            "System program for account creation."
           ],
           "address": "11111111111111111111111111111111"
         },
         {
           "name": "clock",
           "docs": [
-            "Clock sysvar for timestamp validation"
+            "Clock sysvar for timestamp validation."
           ],
           "address": "SysvarC1ock11111111111111111111111111111111"
         }
@@ -495,7 +532,8 @@ export type Raffle = {
         {
           "name": "raffleState",
           "docs": [
-            "Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; marked started and used as VRF caller seed."
+            "Raffle state PDA derived from [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].",
+            "This instruction sets `draw_winner_started`; its address is used as the VRF caller seed."
           ],
           "writable": true,
           "pda": {
@@ -522,6 +560,16 @@ export type Raffle = {
               },
               {
                 "kind": "account",
+                "path": "raffle_state.ticket_price",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.max_tickets",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
                 "path": "raffle_state.end_time",
                 "account": "raffleState"
               }
@@ -536,7 +584,7 @@ export type Raffle = {
         {
           "name": "clock",
           "docs": [
-            "Clock sysvar for timestamp validation"
+            "Clock sysvar for timestamp validation."
           ],
           "address": "SysvarC1ock11111111111111111111111111111111"
         },
@@ -607,18 +655,15 @@ export type Raffle = {
         {
           "name": "vrfProgramIdentity",
           "docs": [
-            "Callback can only be executed by the VRF program through CPI. Value must be",
-            "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw. MagicBlock calls this PDA",
-            "the \"program identity\", but it is a PDA owned by the VRF program, not the",
-            "VRF program itself."
+            "VRF program identity signer (validated in code last to surface other constraint errors first)."
           ],
           "signer": true
         },
         {
           "name": "raffleState",
           "docs": [
-            "Raffle state PDA [RAFFLE_SEED, raffle_manager, end_time]; mutated to set winner.",
-            "Validated first to make the draw_winner_started and winner_index checks testable."
+            "Raffle state PDA [RAFFLE_SEED, raffle_manager, ticket_price, max_tickets, end_time].",
+            "Mutated to record `winner_index` and emit the WinnerDrawnEvent."
           ],
           "writable": true,
           "pda": {
@@ -641,6 +686,16 @@ export type Raffle = {
               {
                 "kind": "account",
                 "path": "raffle_state.raffle_manager",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.ticket_price",
+                "account": "raffleState"
+              },
+              {
+                "kind": "account",
+                "path": "raffle_state.max_tickets",
                 "account": "raffleState"
               },
               {
@@ -702,7 +757,7 @@ export type Raffle = {
     },
     {
       "code": 6001,
-      "name": "raffleExceeds30Days"
+      "name": "maxRaffleLengthExceeded"
     },
     {
       "code": 6002,
@@ -714,54 +769,58 @@ export type Raffle = {
     },
     {
       "code": 6004,
-      "name": "raffleHasEnded"
+      "name": "ticketPriceTooLow"
     },
     {
       "code": 6005,
-      "name": "insufficientTickets"
+      "name": "raffleHasEnded"
     },
     {
       "code": 6006,
-      "name": "winnerAlreadyDrawn"
+      "name": "insufficientTickets"
     },
     {
       "code": 6007,
-      "name": "raffleNotOver"
+      "name": "winnerAlreadyDrawn"
     },
     {
       "code": 6008,
-      "name": "noEntrants"
+      "name": "raffleNotOver"
     },
     {
       "code": 6009,
-      "name": "drawWinnerNotStarted"
+      "name": "noEntrants"
     },
     {
       "code": 6010,
-      "name": "callbackAlreadyInvoked"
+      "name": "drawWinnerNotStarted"
     },
     {
       "code": 6011,
-      "name": "callbackNotInvokedByVrf"
+      "name": "callbackAlreadyInvoked"
     },
     {
       "code": 6012,
-      "name": "winnerNotYetDrawn"
+      "name": "callbackNotInvokedByVrf"
     },
     {
       "code": 6013,
-      "name": "notWinner"
+      "name": "winnerNotYetDrawn"
     },
     {
       "code": 6014,
-      "name": "prizeAlreadyClaimed"
+      "name": "notWinner"
     },
     {
       "code": 6015,
-      "name": "onlyRaffleManagerOrProgramOwnerCanClose"
+      "name": "prizeAlreadyClaimed"
     },
     {
       "code": 6016,
+      "name": "onlyRaffleManagerOrProgramOwnerCanClose"
+    },
+    {
+      "code": 6017,
       "name": "canNotCloseActiveRaffle"
     }
   ],
