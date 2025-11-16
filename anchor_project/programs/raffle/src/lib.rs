@@ -21,7 +21,7 @@ pub mod errors;
 pub mod instructions;
 pub mod state;
 
-declare_id!("4LcauHsjXDZqGonxZu261YLPHV3TRsLYZ7o1pTT5q2uQ");
+declare_id!("Rafs56vPtgBLfMQoafTVmf4QB11gqqkysfJx949d99p");
 
 #[program]
 pub mod raffle {

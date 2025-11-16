@@ -8,7 +8,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-raffle = "4LcauHsjXDZqGonxZu261YLPHV3TRsLYZ7o1pTT5q2uQ"
+raffle = "Rafs56vPtgBLfMQoafTVmf4QB11gqqkysfJx949d99p"
 
 [registry]
 url = "https://api.apr.dev"
