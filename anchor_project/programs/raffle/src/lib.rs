@@ -1,18 +1,12 @@
 //! Raffle program
 //!
-//! This program implements a simple raffle with the following flow:
+//! Implements a raffle with the following flow:
 //! - create_raffle: Initialize a raffle state PDA with pricing, capacity, and end time.
 //! - buy_tickets: Users buy one or more tickets; entrants are appended.
 //! - draw_winner: Starts a VRF request to select a winner once the raffle is over.
 //! - draw_winner_callback: VRF callback that finalizes winner selection and emits `WinnerDrawnEvent`.
 //! - claim_prize: Winner claims the accumulated prize from the raffle account.
 //! - close_raffle: Raffle manager reclaims rent once eligible.
-//!
-//! Documentation source of truth:
-//! - Instruction docs (including Args, Errors, and Emits) live in this file inside the `#[program]` module and are propagated to the IDL.
-//! - Required accounts for each instruction are documented on the corresponding `#[derive(Accounts)]` context structs under `instructions/`.
-//! - On-chain state structs are documented in `state.rs` and appear under `types` in the IDL.
-//! - Events are documented where they are defined (e.g., `WinnerDrawnEvent` in `draw_winner.rs`).
 
 #![allow(unexpected_cfgs)]
 use anchor_lang::prelude::*;
@@ -72,10 +66,9 @@ pub mod raffle {
     }
 
     /// Requests verifiable randomness for the raffle and marks the draw process
-    /// as started. This triggers an off-chain VRF flow that will later invoke
-    /// the on-chain callback.
-    ///
-    /// Emits: none (the winner event is emitted by the callback).
+    /// as started. This triggers an off-chain VRF flow that later (within a few
+    /// seconds) invokes the `draw_winner_callback` callback that does the actual
+    /// winner selection.
     ///
     /// Accounts: see [`DrawWinner`] for required accounts and seeds.
     ///
@@ -110,9 +103,8 @@ pub mod raffle {
 
     /// Transfers the total prize pool to the winner and marks the raffle as
     /// claimed. Can be called by anyone after the winner has been drawn; the
-    /// prize is always sent to the correct winner as determined by the VRF.
-    ///
-    /// Emits: none
+    /// prize is always sent to the winner selected by `draw_winner_callback`
+    /// using the VRF's randomness.
     ///
     /// Accounts: see [`ClaimPrize`] for required accounts and seeds.
     ///
